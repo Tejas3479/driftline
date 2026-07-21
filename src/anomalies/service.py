@@ -3,12 +3,12 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, case
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ingestion.models import Metric, DimensionDef, Observation
-from src.anomalies.models import DailyRollup
+from src.anomalies.models import DailyRollup, Anomaly, AnomalyTypeEnum, AnomalyStatusEnum
 from src.anomalies.schemas import TimeseriesPointSchema
 
 def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
@@ -19,7 +19,7 @@ def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
     Formula:
       trend_t     = rolling(28, min_periods=14).mean()
       detrended_t = value_t - trend_t
-      seasonal_d  = mean(detrended_t for all t sharing day_of_week == d)
+      seasonal_d  = median(detrended_t for all t sharing day_of_week == d)  # Median for outlier robustness
       residual_t  = value_t - trend_t - seasonal_{day_of_week(t)}
     
     For rows where trend is NULL (e.g. first 13 days or gaps), trend/seasonal/residual are NULL.
@@ -35,8 +35,8 @@ def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
     # Day of week (0 = Monday, 6 = Sunday)
     df['day_of_week'] = df.index.dayofweek
     
-    # Seasonal constants (7 day-of-week means)
-    seasonal_map = df.groupby('day_of_week')['detrended'].mean().to_dict()
+    # Seasonal constants (7 day-of-week medians for outlier robustness)
+    seasonal_map = df.groupby('day_of_week')['detrended'].median().to_dict()
     df['seasonal'] = df['day_of_week'].map(seasonal_map)
     
     # Calculate residual
@@ -159,6 +159,198 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
         )
         await db.execute(upsert_stmt, upsert_values)
         await db.commit()
+
+    # Trigger anomaly detection and persistence
+    await detect_and_persist_anomalies(db, metric_id)
+
+async def get_metric(db: AsyncSession, metric_id: int) -> Optional[Metric]:
+    """Retrieve metric by ID."""
+    result = await db.execute(select(Metric).where(Metric.id == metric_id))
+    return result.scalar_one_or_none()
+
+async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None:
+    """
+    Computes robust z-scores on residuals using scaled MAD, maps sensitivity,
+    classifies anomalies, and performs conditional upsert to freeze older values.
+    """
+    # 1. Fetch total daily rollups where trend is not null
+    rollup_res = await db.execute(
+        select(DailyRollup).where(
+            DailyRollup.metric_id == metric_id,
+            DailyRollup.dimension_values == {},
+            DailyRollup.trend.is_not(None)
+        ).order_by(DailyRollup.date)
+    )
+    rollups = rollup_res.scalars().all()
+    if len(rollups) < 14:
+        return
+
+    # Convert to DataFrame
+    df = pd.DataFrame([
+        {
+            "date": r.date,
+            "value_total": r.value_total,
+            "trend": r.trend,
+            "seasonal": r.seasonal,
+            "residual": r.residual
+        }
+        for r in rollups
+    ])
+    
+    # Sort and reset index
+    df.sort_values("date", inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
+    # 2. Compute MAD and MAD_scaled
+    residuals = df["residual"].values
+    med_res = np.median(residuals)
+    abs_devs = np.abs(residuals - med_res)
+    mad = np.median(abs_devs)
+
+    vals = df["value_total"].values
+    med_val = np.median(np.abs(vals))
+    mad_floor = 0.01 * med_val
+
+    mad_scaled = max(mad, mad_floor)
+
+    # Early Return for flat/zero series
+    if mad_scaled < 1e-9:
+        return
+
+    # 3. Compute robust z-score
+    df["robust_z"] = 0.6745 * (df["residual"] - med_res) / mad_scaled
+
+    # 4. Get metric sensitivity threshold
+    metric = await get_metric(db, metric_id)
+    if not metric:
+        return
+        
+    sensitivity = metric.sensitivity.value if hasattr(metric.sensitivity, 'value') else str(metric.sensitivity)
+    if sensitivity == 'low':
+        threshold = 3.5
+    elif sensitivity == 'high':
+        threshold = 1.8
+    else:
+        threshold = 2.5
+
+    # Scan for flagged dates
+    flagged_indices = df[df["robust_z"].abs() > threshold].index.tolist()
+    if not flagged_indices:
+        return
+
+    max_date = df["date"].max()
+    cutoff_date = max_date - timedelta(days=14)
+
+    # Centered 7-day standard deviation of residuals for volatility checking
+    rolling_std = df["residual"].rolling(window=7, center=True).std()
+
+    upsert_values = []
+
+    for idx in flagged_indices:
+        row = df.iloc[idx]
+        d_date = row["date"]
+        r_z = float(row["robust_z"])
+        res_val = float(row["residual"])
+
+        # Default classification
+        classification = "spike" if res_val > 0 else "dip"
+        explanation = f"Spike detected with robust z-score {r_z:.2f}." if res_val > 0 else f"Dip detected with robust z-score {r_z:.2f}."
+
+        # Check Level Shift (trailing [t-14, t-1] and leading [t+1, t+14] windows inside boundaries)
+        if idx >= 14 and idx < len(df) - 14:
+            trend_before = df.iloc[idx - 14:idx]["trend"].mean()
+            trend_after = df.iloc[idx + 1:idx + 15]["trend"].mean()
+            if pd.notnull(trend_before) and pd.notnull(trend_after):
+                diff = abs(trend_before - trend_after)
+                if diff > 3.0 * mad_scaled:
+                    classification = "level_shift"
+                    explanation = f"Level shift detected: trend shifted by {diff:.2f} (threshold: {3.0*mad_scaled:.2f})."
+
+        # Check Volatility (only if not level shift and within centered 7-day boundaries)
+        # Volatility implies a sustained variance change, not a single-day event.
+        # We verify that adjacent days have robust z-scores elevated (e.g. > 1.0)
+        # to distinguish it from a single spike/dip.
+        if classification != "level_shift":
+            if idx >= 3 and idx < len(df) - 3:
+                adjacent_indices = [idx - 1, idx + 1]
+                adjacent_elevated = any(
+                    abs(df.iloc[adj]["robust_z"]) > 1.0 
+                    for adj in adjacent_indices 
+                    if 0 <= adj < len(df)
+                )
+                
+                if adjacent_elevated:
+                    std_local = rolling_std.iloc[idx]
+                    
+                    # Exclude ±14 day buffer around idx from historical rolling-std baseline population
+                    historical_slice = rolling_std.drop(index=df.index[max(0, idx - 14):min(len(df), idx + 15)])
+                    baseline_std = historical_slice.median()
+                    
+                    if pd.notnull(std_local) and pd.notnull(baseline_std) and baseline_std > 0:
+                        if std_local > 3.0 * baseline_std:
+                            classification = "volatility"
+                            explanation = f"Volatility detected: local std {std_local:.2f} deviates significantly from historical std {baseline_std:.2f}."
+
+        upsert_values.append({
+            "metric_id": metric_id,
+            "date": d_date,
+            "severity_score": abs(r_z),
+            "type": classification,
+            "z_score": r_z,
+            "isolation_score": 0.0,
+            "explanation_text": explanation
+        })
+
+    if upsert_values:
+        stmt = insert(Anomaly)
+        upsert_stmt = stmt.on_conflict_do_update(
+            index_elements=['metric_id', 'date'],
+            set_={
+                'z_score': case(
+                    (Anomaly.date < cutoff_date, Anomaly.z_score),
+                    else_=stmt.excluded.z_score
+                ),
+                'type': case(
+                    (Anomaly.date < cutoff_date, Anomaly.type),
+                    else_=stmt.excluded.type
+                ),
+                'severity_score': case(
+                    (Anomaly.date < cutoff_date, Anomaly.severity_score),
+                    else_=stmt.excluded.severity_score
+                ),
+                'isolation_score': case(
+                    (Anomaly.date < cutoff_date, Anomaly.isolation_score),
+                    else_=stmt.excluded.isolation_score
+                )
+            }
+        )
+        await db.execute(upsert_stmt, upsert_values)
+        await db.commit()
+
+async def get_anomalies(
+    db: AsyncSession,
+    metric_id: int,
+    status_filter: Optional[AnomalyStatusEnum] = None,
+    severity_min: Optional[float] = None,
+    type_filter: Optional[AnomalyTypeEnum] = None
+) -> List[Anomaly]:
+    """List anomalies for a metric with query filtering."""
+    query = select(Anomaly).where(Anomaly.metric_id == metric_id).order_by(Anomaly.date)
+    
+    if status_filter:
+        query = query.where(Anomaly.status == status_filter)
+    if severity_min:
+        query = query.where(Anomaly.severity_score >= severity_min)
+    if type_filter:
+        query = query.where(Anomaly.type == type_filter)
+        
+    res = await db.execute(query)
+    return list(res.scalars().all())
+
+async def get_anomaly_detail(db: AsyncSession, anomaly_id: int) -> Optional[Anomaly]:
+    """Retrieve detailed anomaly record."""
+    res = await db.execute(select(Anomaly).where(Anomaly.id == anomaly_id))
+    return res.scalar_one_or_none()
 
 async def get_metric_timeseries(
     db: AsyncSession,

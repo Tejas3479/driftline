@@ -24,3 +24,11 @@
 - Added `dimension_values` `JSONB` column to `DailyRollup` model with a unique constraint index `uq_daily_rollups_metric_date_dims` and generated Alembic migration `cd678bef8820_add_dimension_values_to_daily_rollups.py`.
 - Decisions: Configured continuous daily calendar reindexing before rolling calculation; enforced strict reconstruction validation raising `ValueError` if the decomposition invariant check fails; ensured complete historical recompute-and-overwrite of metrics on rerun.
 - Next session context: All rollups are applied and validated, with 9/9 tests passing. Time series data is fully pre-processed and ready for Session 5 (anomaly detection algorithms and IsolationForest configuration).
+
+## Session 5: Robust Anomaly Detection & Classification
+- Implemented robust z-score calculation on residuals using Median Absolute Deviation (MAD) in `src/anomalies/service.py`.
+- Mapped sensitivity settings (`low` $\rightarrow 3.5$, `medium` $\rightarrow 2.5$, `high` $\rightarrow 1.8$) to robust z-score thresholds.
+- Configured multi-class classification: `level_shift` (compares trailing vs leading 14-day trend means), `volatility` (compares local 7-day residual std against historical baseline, excluding $\pm 14$ day buffer), and fallback `spike`/`dip`.
+- Added database unique index `uq_anomalies_metric_date` on `(metric_id, date)` and migration `db622994a7d7_add_unique_to_anomalies.py` (which includes SQL-level deduplication).
+- Decisions: Integrated SQL conditional `CASE` statements to freeze anomaly categories (`type`, `z_score`, `severity_score`, `isolation_score`) older than `max_date - 14 days` to preserve user-reviewed details; implemented low-variance baseline floor scaling and early return skip for all-zero/flat metrics; populated `severity_score` with $|z|$ and `isolation_score` with `0.0` as temporary placeholders pending Session 7.
+- Next session context: Anomaly detection is fully operational and integrated with ingestion. Exposes `GET /metrics/{id}/anomalies` and `GET /anomalies/{id}` endpoints. 15/15 tests passing. Ready for Session 6 (FastAPI scheduling and APScheduler integration).

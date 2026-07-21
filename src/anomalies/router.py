@@ -1,9 +1,10 @@
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
-from src.anomalies.schemas import TimeseriesResponseSchema
+from src.anomalies.models import AnomalyTypeEnum, AnomalyStatusEnum
+from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema
 import src.anomalies.service as service
 
 router = APIRouter()
@@ -31,3 +32,26 @@ async def trigger_metric_rollup_endpoint(
         return {"status": "success", "detail": f"Rollup and decomposition completed for metric {id}."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/metrics/{id}/anomalies", response_model=List[AnomalyResponseSchema])
+async def list_anomalies_endpoint(
+    id: int,
+    status: Optional[AnomalyStatusEnum] = Query(None),
+    severity_min: Optional[float] = Query(None),
+    type: Optional[AnomalyTypeEnum] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    metric = await service.get_metric(db, id)
+    if not metric:
+        raise HTTPException(status_code=404, detail=f"Metric with id {id} not found.")
+    return await service.get_anomalies(db, id, status, severity_min, type)
+
+@router.get("/anomalies/{id}", response_model=AnomalyDetailResponseSchema)
+async def get_anomaly_detail_endpoint(
+    id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    anomaly = await service.get_anomaly_detail(db, id)
+    if not anomaly:
+        raise HTTPException(status_code=404, detail=f"Anomaly with id {id} not found.")
+    return anomaly

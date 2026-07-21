@@ -56,4 +56,5 @@ class Anomaly(Base):
 
     __table_args__ = (
         Index("ix_anomalies_metric_date", "metric_id", "date"),
+        Index("uq_anomalies_metric_date", "metric_id", "date", unique=True),
     )

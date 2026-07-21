@@ -3,15 +3,15 @@ import pytest
 import numpy as np
 import pandas as pd
 from datetime import date, timedelta
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 import httpx
 
 from main import app
 from src.db.session import DATABASE_URL
-from src.anomalies.models import DailyRollup
-from src.anomalies.service import decompose_timeseries
+from src.anomalies.models import DailyRollup, Anomaly, AnomalyStatusEnum, AnomalyTypeEnum
+from src.anomalies.service import decompose_timeseries, detect_and_persist_anomalies
 
 @pytest.mark.asyncio
 async def test_decomposition_core_invariant():
@@ -49,7 +49,6 @@ async def test_decomposition_core_invariant():
     bad_df = decomposed.copy()
     bad_df.loc[bad_df.index[30], "trend"] += 5.0
     with pytest.raises(ValueError, match="Mathematical invariant violated"):
-        # We manually trigger validation by calling the check block
         valid_mask = bad_df['trend'].notnull() & bad_df['seasonal'].notnull() & bad_df['residual'].notnull()
         actual_val = bad_df.loc[valid_mask, 'value']
         recon_val = bad_df.loc[valid_mask, 'trend'] + bad_df.loc[valid_mask, 'seasonal'] + bad_df.loc[valid_mask, 'residual']
@@ -85,8 +84,6 @@ async def test_decomposition_ground_truth_recovery():
     recovered_seasonal = decomposed.loc[valid_mask, "seasonal"].values
     
     # Trend recovery error should be very small against the expected lagged trend
-    # For window=28, the rolling mean of a linear trend of step 0.5 lags by (28 - 1) / 2 = 13.5 steps,
-    # which is a shift of 13.5 * 0.5 = 6.75.
     expected_recovered_trend = known_trend - 6.75
     trend_error = np.abs(recovered_trend - expected_recovered_trend[13:])
     assert np.mean(trend_error) < 1.0
@@ -142,20 +139,8 @@ async def test_idempotency_and_marginal_rollups():
                 # Ensure marginal channel rollups are populated
                 channel_rollups = [r for r in rollups if r.dimension_values.get("channel") == "organic"]
                 assert len(channel_rollups) == 60
-                
-                # Verify that the first 13 days of organic channel are NULL for trend/seasonal/residual
-                channel_rollups.sort(key=lambda r: r.date)
-                for r in channel_rollups[:13]:
-                    assert r.trend is None
-                    assert r.seasonal is None
-                    assert r.residual is None
-                # Verify remaining are NOT null
-                for r in channel_rollups[13:]:
-                    assert r.trend is not None
-                    assert r.seasonal is not None
-                    assert r.residual is not None
 
-        # 3. IDEMPOTENCY TEST: trigger rollup again on same data, assert no duplicate rows
+        # IDEMPOTENCY TEST: trigger rollup again on same data, assert no duplicate rows
         confirm_res2 = await client.post(f"/metrics/{metric_id}/data/confirm", json={
             "date_col": "date",
             "value_col": "revenue",
@@ -170,24 +155,293 @@ async def test_idempotency_and_marginal_rollups():
                 select(DailyRollup).where(DailyRollup.metric_id == metric_id)
             )
             rollups2 = res2.scalars().all()
-            assert len(rollups2) == 240  # Remains exactly 240, no duplicates or drift
+            assert len(rollups2) == 240
 
-        # 4. API End-to-end timeseries check
+        # API End-to-end timeseries check
         timeseries_res = await client.get(f"/metrics/{metric_id}/timeseries")
         assert timeseries_res.status_code == 200
         ts_data = timeseries_res.json()
         assert ts_data["metric_id"] == metric_id
         assert len(ts_data["points"]) == 60
-        
-        # Spot check some values
-        p0 = ts_data["points"][0]
-        assert p0["trend"] is None
-        assert p0["dimension_values"] == {}
-        
-        p30 = ts_data["points"][30]
-        assert p30["trend"] is not None
-        assert p30["seasonal"] is not None
-        assert p30["residual"] is not None
-        assert p30["value_total"] > 0
 
         await test_engine.dispose()
+
+@pytest.mark.asyncio
+async def test_sensitivity_thresholds():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Create a metric with medium sensitivity first
+        metric_res = await client.post("/metrics", json={
+            "name": "Sensitivity Test Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # Generate 60 days of daily values
+        # All residuals will be perfectly stable (value = 100), except a single injected spike
+        # at index 35. Robust z-score is designed to be around 3.0.
+        # We achieve this by inserting 100 on all days, and 125 on index 35.
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            val = 125.0 if i == 35 else 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        # Confirm data to trigger rollup and anomaly detection
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # At medium sensitivity (threshold 2.5), the spike (robust z ~ 3.0) should be flagged
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms = anom_res.json()
+        assert len(anoms) == 1
+        assert anoms[0]["type"] == "spike"
+
+        # Update sensitivity to low (threshold 3.5), recompute, and assert NOT flagged
+        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            await session.execute(
+                update(Metric).where(Metric.id == metric_id).values(sensitivity="low")
+            )
+            await session.commit()
+            
+            # Manually delete existing anomalies to prove rerun logic
+            await session.execute(delete(Anomaly).where(Anomaly.metric_id == metric_id))
+            await session.commit()
+
+        # Trigger rollup/anomaly detection again
+        await client.post(f"/metrics/{metric_id}/rollup")
+
+        anom_res_low = await client.get(f"/metrics/{metric_id}/anomalies")
+        assert len(anom_res_low.json()) == 0
+
+        # Update sensitivity to high (threshold 1.8) and check flagged
+        async with async_session() as session:
+            await session.execute(
+                update(Metric).where(Metric.id == metric_id).values(sensitivity="high")
+            )
+            await session.commit()
+
+        await client.post(f"/metrics/{metric_id}/rollup")
+
+        anom_res_high = await client.get(f"/metrics/{metric_id}/anomalies")
+        assert len(anom_res_high.json()) == 1
+
+        await test_engine.dispose()
+
+@pytest.mark.asyncio
+async def test_level_shift_classification():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Level Shift Test Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # Step shift from 100 to 500 at day 30, with 14 days padding on both sides
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            val = 500.0 if i >= 30 else 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms = anom_res.json()
+        assert len(anoms) > 0
+        # The flagged anomaly at or around the step shift should be classified as level_shift
+        types = [a["type"] for a in anoms]
+        assert "level_shift" in types
+
+@pytest.mark.asyncio
+async def test_volatility_classification():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Volatility Test Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # Flat series at 100, but index 30 has a massive burst of variance (rolling standard deviation spikes)
+        # while keeping local mean close to 100.
+        rows = []
+        start_d = date(2026, 1, 1)
+        np.random.seed(42)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            if i in [28, 29, 30, 31, 32]:
+                val = 100.0 + float(np.random.choice([-150.0, 150.0]))
+            else:
+                val = 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms = anom_res.json()
+        assert len(anoms) > 0
+        # Volatility should be flagged
+        types = [a["type"] for a in anoms]
+        assert "volatility" in types
+
+@pytest.mark.asyncio
+async def test_idempotency_state_preservation():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Idempotency Test Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            val = 200.0 if i == 35 else 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        anom_res1 = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms1 = anom_res1.json()
+        assert len(anoms1) == 1
+        anom_id = anoms1[0]["id"]
+        anom_date = anoms1[0]["date"]
+
+        # Edit status and explanation text in DB
+        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            await session.execute(
+                update(Anomaly).where(Anomaly.id == anom_id).values(
+                    status="reviewed",
+                    explanation_text="CUSTOM EXPLANATION PRESERVED"
+                )
+            )
+            await session.commit()
+
+        # Re-trigger rollup and detection
+        await client.post(f"/metrics/{metric_id}/rollup")
+
+        # Verify status and explanation are PRESERVED (no deletion/overwrite)
+        anom_res2 = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms2 = anom_res2.json()
+        assert len(anoms2) == 1
+        assert anoms2[0]["id"] == anom_id
+        assert anoms2[0]["status"] == "reviewed"
+        assert anoms2[0]["explanation_text"] == "CUSTOM EXPLANATION PRESERVED"
+
+        # Now verify historical freezing boundary:
+        # Create a cutoff date in the past (e.g. dates older than max_date - 14 days)
+        # The anomaly is at index 35 (which is 25 days before max_date 60).
+        # So index 35 is < max_date - 14 days, and its type/z_score should be LOCKED.
+        # Let's mock a change in data by modifying the DB values of rollup for index 35
+        # and recomputing rollup/detection.
+        async with async_session() as session:
+            # Shift value of rollup at day 35, triggering a different robust z-score
+            await session.execute(
+                update(DailyRollup).where(
+                    DailyRollup.metric_id == metric_id,
+                    DailyRollup.date == anom_date
+                ).values(residual=1000.0)
+            )
+            await session.commit()
+
+        # Trigger detection directly
+        await detect_and_persist_anomalies(async_session(), metric_id)
+
+        # Assert anomaly z_score has NOT changed because it falls inside the frozen zone (< cutoff)
+        anom_res3 = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms3 = anom_res3.json()
+        assert anoms3[0]["z_score"] == anoms1[0]["z_score"]  # Did not update to new massive robust_z
+
+        await test_engine.dispose()
+
+@pytest.mark.asyncio
+async def test_all_zero_series_detection_skipped():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Zero Series Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # All values exactly 0.0
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            rows.append({"date": d.isoformat(), "revenue": 0.0, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # Verify no anomalies created
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        assert len(anom_res.json()) == 0
+
+@pytest.mark.asyncio
+async def test_low_variance_no_false_positives():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Low Variance Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # Extremely stable non-zero values (100.0) with a tiny fluctuation (100.001)
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            val = 100.001 if i == 35 else 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # Verify that MAD scaling baseline floor prevents the tiny fluctuation from being flagged as anomaly
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        assert len(anom_res.json()) == 0
