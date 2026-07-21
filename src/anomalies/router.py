@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.anomalies.models import AnomalyTypeEnum, AnomalyStatusEnum
-from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema
+from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema, AnomalyFeedbackSchema
 import src.anomalies.service as service
 
 router = APIRouter()
@@ -56,3 +56,14 @@ async def get_anomaly_detail_endpoint(
     if not anomaly:
         raise HTTPException(status_code=404, detail=f"Anomaly with id {id} not found.")
     return anomaly
+
+@router.post("/anomalies/{id}/feedback", response_model=AnomalyDetailResponseSchema)
+async def record_anomaly_feedback_endpoint(
+    id: int,
+    schema: AnomalyFeedbackSchema,
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        return await service.record_anomaly_feedback(db, id, schema.status)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

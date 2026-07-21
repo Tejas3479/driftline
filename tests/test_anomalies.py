@@ -493,3 +493,176 @@ async def test_timeseries_mad_consistency():
         assert filtered_mad == full_mad
         assert len(filtered_data["points"]) == 7
 
+
+@pytest.mark.asyncio
+async def test_multivariate_volatility_signature():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # 1. Create a metric with medium sensitivity
+        metric_res = await client.post("/metrics", json={
+            "name": "Multivariate Volatility Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # Generate 60 days of data with regular variance
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            # Baseline alternating values
+            val = 104.0 if i % 2 == 0 else 96.0
+            
+            # Inject volatility anomaly on day 45 (2026-02-15)
+            # We elevate the value slightly to 110.0 (robust z ~ 2.2, below 2.5 threshold)
+            # and break the alternating sequence around it to spike rolling_7d_std
+            if i == 45:
+                val = 110.0
+            elif i in [43, 44]:
+                val = 108.0
+            
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # Fetch anomalies
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms = anom_res.json()
+        
+        # Verify that an anomaly is flagged on day 45
+        # under medium sensitivity (isolation threshold 0.85)
+        # even though robust z-score is below 2.5
+        anoms_45 = [a for a in anoms if a["date"] == "2026-02-15"]
+        assert len(anoms_45) == 1
+        assert abs(anoms_45[0]["z_score"]) < 2.5
+        assert anoms_45[0]["isolation_score"] > 0.85
+
+
+@pytest.mark.asyncio
+async def test_feedback_loop_weight_decay():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Create metric and seed 60 days of data
+        metric_res = await client.post("/metrics", json={
+            "name": "Feedback Test Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            # Two spikes: day 35 (120.0) and day 45 (110.0)
+            if i == 35:
+                val = 120.0
+            elif i == 45:
+                val = 110.0
+            else:
+                val = 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # Fetch anomalies and check initial severity
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms = anom_res.json()
+        assert len(anoms) == 2
+        
+        # Target the day 45 anomaly (2026-02-15) where norm_z and isolation_score differ
+        target_anom = [a for a in anoms if a["date"] == "2026-02-15"][0]
+        target_id = target_anom["id"]
+        initial_severity = target_anom["severity_score"]
+
+        # Fetch metric to assert initial z_score_weight is 0.5
+        metric_detail_res = await client.get(f"/metrics")
+        metrics_list = metric_detail_res.json()
+        metric_data = [m for m in metrics_list if m["id"] == metric_id][0]
+        assert metric_data["z_score_weight"] == 0.5
+
+        # Send 5 consecutive false_positive feedbacks
+        # Since isolation_score is dominant for this smaller spike, isolation weight decays (z_score_weight increases)
+        for _ in range(5):
+            feedback_res = await client.post(f"/anomalies/{target_id}/feedback", json={"status": "false_positive"})
+            assert feedback_res.status_code == 200
+
+        # Assert z_score_weight increased by exactly 0.25 (0.5 -> 0.75)
+        metric_detail_res2 = await client.get(f"/metrics")
+        metric_data2 = [m for m in metric_detail_res2.json() if m["id"] == metric_id][0]
+        assert abs(metric_data2["z_score_weight"] - 0.75) < 1e-4
+
+        # Assert severity score in DB has decreased for this anomaly
+        anom_res2 = await client.get(f"/metrics/{metric_id}/anomalies")
+        target_anom2 = [a for a in anom_res2.json() if a["date"] == "2026-02-15"][0]
+        assert target_anom2["severity_score"] < initial_severity
+        
+        # Verify ceiling clamping: post feedback 5 more times
+        # z_score_weight should increase to 0.9 and stay there (clamp ceiling)
+        for _ in range(5):
+            await client.post(f"/anomalies/{target_id}/feedback", json={"status": "false_positive"})
+            
+        metric_detail_res3 = await client.get(f"/metrics")
+        metric_data3 = [m for m in metric_detail_res3.json() if m["id"] == metric_id][0]
+        assert abs(metric_data3["z_score_weight"] - 0.9) < 1e-4
+
+        # Verify frozen anomaly negative case
+        # Set target anomaly date to day 15 (which is 45 days old relative to day 60)
+        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            res = await session.execute(select(Anomaly).where(Anomaly.id == target_id))
+            db_anom = res.scalars().one()
+            db_anom.date = start_d + timedelta(days=15)
+            frozen_severity = db_anom.severity_score
+            await session.commit()
+            
+        # Post feedback again to trigger recompute
+        await client.post(f"/anomalies/{target_id}/feedback", json={"status": "false_positive"})
+        
+        async with async_session() as session:
+            res = await session.execute(select(Anomaly).where(Anomaly.id == target_id))
+            db_anom_after = res.scalars().one()
+            assert db_anom_after.severity_score == frozen_severity
+
+        # Assert cold start behavior under 30 days
+        cold_metric_res = await client.post("/metrics", json={
+            "name": "Cold Start Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        cold_id = cold_metric_res.json()["id"]
+
+        cold_rows = []
+        for i in range(25): # 25 points < 30
+            d = start_d + timedelta(days=i)
+            val = 120.0 if i == 20 else 100.0
+            cold_rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{cold_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": cold_rows,
+            "replace": True
+        })
+
+        cold_anom_res = await client.get(f"/metrics/{cold_id}/anomalies")
+        cold_anoms = cold_anom_res.json()
+        assert len(cold_anoms) > 0
+        assert all(a["isolation_score"] == 0.0 for a in cold_anoms)
+
+        await test_engine.dispose()
+
+

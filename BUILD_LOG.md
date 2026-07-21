@@ -41,3 +41,16 @@
 - Built dynamic frontend pages and components: Overview list card layout with inline SVG sparklines, warning banners with expected-value check division-by-zero guards, and a dynamic-imported `react-plotly.js` component with range filtering, shaded baseline bounds (`trend ± MAD`), and type-distinct markers/lines.
 - Wrote frontend Vitest unit test suites mock-verifying rendering, banners, filtering, and Plotly marker shapes counts, and added `test_timeseries_mad_consistency` backend test.
 - Next session context: Overview dashboard and time-series detail page are fully operational. 16/16 backend tests passing, 3/3 frontend tests passing. Ready for Session 7 (IsolationForest anomaly classification & real severity scoring).
+
+## Session 7: Multivariate Anomaly Detection & Weight Decay Feedback Loop
+- Added a second multivariate anomaly signal using scikit-learn's `IsolationForest` fitted on each metric's daily rollups history.
+- Feature engineered per-day features: `[value_total, residual, robust_z, rolling_7d_std, rolling_7d_mean_delta, day_of_week]`. Handled trailing edge NaN risks by running rolling standard deviation (`window=7, min_periods=1`) on the continuous calendar rollups history and using `.fillna(0.0)`.
+- Calculated continuous isolation score using `score_samples()` (multiplied by `-1.0` and min-max scaled to `[0.0, 1.0]`). We used `score_samples()` because it yields a stable probability-like continuous score distribution, making min-max scaling consistent.
+- Implemented a cold-start guard: IsolationForest scoring is skipped (and `isolation_score` defaulted to `0.0`) if the metric has fewer than 30 valid rollup points; severity score calculation uses z-score alone (`w_z = 1.0`) during cold-start to prevent severity dilution.
+- Gated the IsolationForest signal with a robust z-score check: `isolation_score` is clamped to `0.0` if $|robust\_z| < 0.1$, preventing tiny noise fluctuations on flat/low-variance metrics from getting falsely scaled up to 1.0.
+- Decoupled metric configuration by tracking a single weight `z_score_weight` in the database, automatically deriving `w_iso = 1.0 - z_score_weight`.
+- Implemented feedback loop endpoint `POST /anomalies/{id}/feedback`. Upon recording a `false_positive` feedback:
+  - Compares rescaled $|robust\_z|$ and `isolation_score` of the target anomaly.
+  - Decays the dominant weight by `0.05` (clamped to `[0.1, 0.9]`).
+  - Instantly recomputes the severity score of all non-frozen anomalies ($\ge$ max_date - 14 days) in the database.
+- Next session context: Multivariate anomaly detection and the alert feedback loop are fully functional. All 18 backend tests passing. Ready for Session 8 (Anomaly details and historical visualization).

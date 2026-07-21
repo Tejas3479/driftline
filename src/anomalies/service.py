@@ -187,22 +187,21 @@ def compute_scaled_mad(residuals: np.ndarray, values: np.ndarray) -> Optional[fl
         return None
     return float(mad_scaled)
 
-async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None:
+def compute_timeseries_anomaly_signals(metric: Metric, rollups: List[DailyRollup]) -> Optional[pd.DataFrame]:
     """
-    Computes robust z-scores on residuals using scaled MAD, maps sensitivity,
-    classifies anomalies, and performs conditional upsert to freeze older values.
+    Unified source of truth for time series anomaly signals calculation.
+    Returns a pandas DataFrame of valid points (where trend is not null) containing:
+      - 'date'
+      - 'value_total'
+      - 'trend'
+      - 'residual'
+      - 'robust_z'
+      - 'isolation_score'
+      - 'norm_z'
+      - 'severity_score'
     """
-    # 1. Fetch total daily rollups where trend is not null
-    rollup_res = await db.execute(
-        select(DailyRollup).where(
-            DailyRollup.metric_id == metric_id,
-            DailyRollup.dimension_values == {},
-            DailyRollup.trend.is_not(None)
-        ).order_by(DailyRollup.date)
-    )
-    rollups = rollup_res.scalars().all()
     if len(rollups) < 14:
-        return
+        return None
 
     # Convert to DataFrame
     df = pd.DataFrame([
@@ -216,87 +215,177 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
         for r in rollups
     ])
     
-    # Sort and reset index
+    # Sort and reset index to ensure continuous calendar calculations
     df.sort_values("date", inplace=True)
     df.reset_index(drop=True, inplace=True)
 
-    # 2. Compute MAD and MAD_scaled via shared helper
-    residuals = df["residual"].values
-    vals = df["value_total"].values
+    # 1. Compute rolling features on continuous calendar history (prevents NaN issues on trailing edge)
+    df["rolling_7d_std"] = df["residual"].rolling(window=7, min_periods=1).std().fillna(0.0)
+    df["val_diff"] = df["value_total"].diff()
+    df["rolling_7d_mean_delta"] = df["val_diff"].rolling(window=7, min_periods=1).mean().fillna(0.0)
+    df["day_of_week"] = df["date"].apply(lambda d: d.weekday())
+
+    # 2. Filter to valid segment where trend decomposition has started
+    df_valid = df[df["trend"].notnull()].copy()
+    if df_valid.empty:
+        return None
+
+    # 3. Compute robust z-score via shared compute_scaled_mad
+    residuals = df_valid["residual"].values
+    vals = df_valid["value_total"].values
     mad_scaled = compute_scaled_mad(residuals, vals)
-
-    # Early Return for flat/zero series
     if mad_scaled is None:
-        return
+        return None
 
-    # 3. Compute robust z-score
     med_res = np.median(residuals)
-    df["robust_z"] = 0.6745 * (df["residual"] - med_res) / mad_scaled
+    df_valid["robust_z"] = 0.6745 * (df_valid["residual"] - med_res) / mad_scaled
 
-    # 4. Get metric sensitivity threshold
+    # Normalize robust_z to [0, 1] over valid history
+    abs_z = df_valid["robust_z"].abs().values
+    min_z = abs_z.min()
+    max_z = abs_z.max()
+    z_range = max_z - min_z
+    if z_range > 1e-9:
+        df_valid["norm_z"] = (abs_z - min_z) / z_range
+    else:
+        df_valid["norm_z"] = 0.0
+
+    # 4. Cold-Start Guard check: skip IsolationForest if < 30 points
+    if len(df_valid) < 30:
+        df_valid["isolation_score"] = 0.0
+        # Under cold start, z-score gets 100% weight, severity is not diluted
+        combined = df_valid["norm_z"].values
+        df_valid["severity_score"] = 100.0 / (1.0 + np.exp(-12.0 * (combined - 0.5)))
+    else:
+        from sklearn.ensemble import IsolationForest
+        features = ['value_total', 'residual', 'robust_z', 'rolling_7d_std', 'rolling_7d_mean_delta', 'day_of_week']
+        X = df_valid[features].values
+        
+        # Fit IsolationForest with random_state=42 for deterministic runs
+        model = IsolationForest(random_state=42)
+        model.fit(X)
+        
+        # score_samples yields negative values; multiply by -1 to get positive anomaly scores
+        raw_scores = -1.0 * model.score_samples(X)
+        min_score = raw_scores.min()
+        max_score = raw_scores.max()
+        score_range = max_score - min_score
+        
+        if score_range > 1e-9:
+            df_valid["isolation_score"] = (raw_scores - min_score) / score_range
+        else:
+            df_valid["isolation_score"] = 0.0
+
+        # Clamp isolation score to 0.0 if robust z-score magnitude is extremely small
+        # to prevent tiny noise fluctuations on flat metrics from being scaled up to 1.0.
+        df_valid["isolation_score"] = np.where(df_valid["robust_z"].abs() < 0.1, 0.0, df_valid["isolation_score"])
+
+        w_z = metric.z_score_weight
+        w_iso = 1.0 - w_z
+        combined = w_z * df_valid["norm_z"].values + w_iso * df_valid["isolation_score"].values
+        df_valid["severity_score"] = 100.0 / (1.0 + np.exp(-12.0 * (combined - 0.5)))
+
+    return df_valid
+
+async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None:
+    """
+    Computes robust z-scores and IsolationForest scores, combines them into severity scores,
+    and updates anomalies table with 14-day history freezing.
+    """
     metric = await get_metric(db, metric_id)
     if not metric:
         return
-        
+
+    # Fetch total daily rollups
+    rollup_res = await db.execute(
+        select(DailyRollup).where(
+            DailyRollup.metric_id == metric_id,
+            DailyRollup.dimension_values == {}
+        ).order_by(DailyRollup.date)
+    )
+    rollups = rollup_res.scalars().all()
+    if len(rollups) < 14:
+        return
+
+    # Compute z-scores, isolation scores and severity scores
+    df_valid = compute_timeseries_anomaly_signals(metric, rollups)
+    if df_valid is None or df_valid.empty:
+        return
+
+    # Get metric sensitivity thresholds
     sensitivity = metric.sensitivity.value if hasattr(metric.sensitivity, 'value') else str(metric.sensitivity)
     if sensitivity == 'low':
-        threshold = 3.5
+        z_threshold = 3.5
+        iso_threshold = 999.0
     elif sensitivity == 'high':
-        threshold = 1.8
+        z_threshold = 1.8
+        iso_threshold = 0.70
     else:
-        threshold = 2.5
+        z_threshold = 2.5
+        iso_threshold = 0.85
 
-    # Scan for flagged dates
-    flagged_indices = df[df["robust_z"].abs() > threshold].index.tolist()
+    # Flag if robust_z absolute value breaches threshold OR isolation_score breaches threshold
+    flagged_mask = (df_valid["robust_z"].abs() > z_threshold) | (df_valid["isolation_score"] > iso_threshold)
+    flagged_indices = df_valid[flagged_mask].index.tolist()
     if not flagged_indices:
         return
 
-    max_date = df["date"].max()
+    max_date = df_valid["date"].max()
     cutoff_date = max_date - timedelta(days=14)
 
     # Centered 7-day standard deviation of residuals for volatility checking
-    rolling_std = df["residual"].rolling(window=7, center=True).std()
+    df_for_std = pd.DataFrame([{"date": r.date, "residual": r.residual} for r in rollups]).sort_values("date").reset_index(drop=True)
+    rolling_std = df_for_std["residual"].rolling(window=7, center=True).std()
+    df_valid["rolling_std_centered"] = rolling_std
+
+    residuals_vals = df_valid["residual"].values
+    vals_vals = df_valid["value_total"].values
+    mad_scaled = compute_scaled_mad(residuals_vals, vals_vals)
+    if mad_scaled is None:
+        return
 
     upsert_values = []
 
     for idx in flagged_indices:
-        row = df.iloc[idx]
+        row = df_valid.loc[idx]
         d_date = row["date"]
         r_z = float(row["robust_z"])
         res_val = float(row["residual"])
+        iso_score = float(row["isolation_score"])
+        severity_score = float(row["severity_score"])
 
         # Default classification
         classification = "spike" if res_val > 0 else "dip"
         explanation = f"Spike detected with robust z-score {r_z:.2f}." if res_val > 0 else f"Dip detected with robust z-score {r_z:.2f}."
 
-        # Check Level Shift (trailing [t-14, t-1] and leading [t+1, t+14] windows inside boundaries)
-        if idx >= 14 and idx < len(df) - 14:
-            trend_before = df.iloc[idx - 14:idx]["trend"].mean()
-            trend_after = df.iloc[idx + 1:idx + 15]["trend"].mean()
+        # Check Level Shift
+        if idx >= 14 and idx < len(df_valid) - 14:
+            trend_before = df_valid.loc[idx - 14:idx - 1, "trend"].mean()
+            trend_after = df_valid.loc[idx + 1:idx + 14, "trend"].mean()
             if pd.notnull(trend_before) and pd.notnull(trend_after):
                 diff = abs(trend_before - trend_after)
                 if diff > 3.0 * mad_scaled:
                     classification = "level_shift"
                     explanation = f"Level shift detected: trend shifted by {diff:.2f} (threshold: {3.0*mad_scaled:.2f})."
 
-        # Check Volatility (only if not level shift and within centered 7-day boundaries)
-        # Volatility implies a sustained variance change, not a single-day event.
-        # We verify that adjacent days have robust z-scores elevated (e.g. > 1.0)
-        # to distinguish it from a single spike/dip.
+        # Check Volatility
         if classification != "level_shift":
-            if idx >= 3 and idx < len(df) - 3:
+            if idx >= 3 and idx < len(df_valid) - 3:
                 adjacent_indices = [idx - 1, idx + 1]
                 adjacent_elevated = any(
-                    abs(df.iloc[adj]["robust_z"]) > 1.0 
+                    abs(df_valid.loc[adj, "robust_z"]) > 1.0 
                     for adj in adjacent_indices 
-                    if 0 <= adj < len(df)
+                    if adj in df_valid.index
                 )
                 
                 if adjacent_elevated:
-                    std_local = rolling_std.iloc[idx]
+                    std_local = df_valid.loc[idx, "rolling_std_centered"]
                     
                     # Exclude ±14 day buffer around idx from historical rolling-std baseline population
-                    historical_slice = rolling_std.drop(index=df.index[max(0, idx - 14):min(len(df), idx + 15)])
+                    historical_slice = df_valid["rolling_std_centered"].drop(
+                        index=df_valid.index[max(0, idx - 14):min(len(df_valid), idx + 15)],
+                        errors="ignore"
+                    )
                     baseline_std = historical_slice.median()
                     
                     if pd.notnull(std_local) and pd.notnull(baseline_std) and baseline_std > 0:
@@ -307,10 +396,10 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
         upsert_values.append({
             "metric_id": metric_id,
             "date": d_date,
-            "severity_score": abs(r_z),
+            "severity_score": severity_score,
             "type": classification,
             "z_score": r_z,
-            "isolation_score": 0.0,
+            "isolation_score": iso_score,
             "explanation_text": explanation
         })
 
@@ -364,6 +453,72 @@ async def get_anomaly_detail(db: AsyncSession, anomaly_id: int) -> Optional[Anom
     """Retrieve detailed anomaly record."""
     res = await db.execute(select(Anomaly).where(Anomaly.id == anomaly_id))
     return res.scalar_one_or_none()
+
+async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: AnomalyStatusEnum) -> Anomaly:
+    """Record anomaly feedback (reviews, false positives, etc.) and run weight updates/updates on false positives."""
+    anomaly = await get_anomaly_detail(db, anomaly_id)
+    if not anomaly:
+        raise ValueError(f"Anomaly with id {anomaly_id} not found.")
+
+    anomaly.status = status
+
+    if status == AnomalyStatusEnum.false_positive:
+        metric = await get_metric(db, anomaly.metric_id)
+        if metric:
+            rollup_res = await db.execute(
+                select(DailyRollup).where(
+                    DailyRollup.metric_id == metric.id,
+                    DailyRollup.dimension_values == {}
+                ).order_by(DailyRollup.date)
+            )
+            rollups = rollup_res.scalars().all()
+            df_valid = compute_timeseries_anomaly_signals(metric, rollups)
+            
+            if df_valid is not None and not df_valid.empty:
+                row = df_valid[df_valid["date"] == anomaly.date]
+                if not row.empty:
+                    norm_z_val = float(row["norm_z"].values[0])
+                    iso_score_val = float(row["isolation_score"].values[0])
+
+                    # Tie-break: if equal or within 1e-6, treat norm_z as dominant
+                    if norm_z_val >= iso_score_val - 1e-6:
+                        # Decay z-score weight
+                        metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight - 0.05))
+                    else:
+                        # Decay isolation weight (increases z_score_weight)
+                        metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight + 0.05))
+
+                    await db.flush()
+
+                    max_date = df_valid["date"].max()
+                    cutoff_date = max_date - timedelta(days=14)
+
+                    anom_res = await db.execute(
+                        select(Anomaly).where(Anomaly.metric_id == metric.id)
+                    )
+                    metric_anoms = anom_res.scalars().all()
+
+                    w_z = metric.z_score_weight
+                    w_iso = 1.0 - w_z
+
+                    for anom in metric_anoms:
+                        if anom.date >= cutoff_date:
+                            anom_row = df_valid[df_valid["date"] == anom.date]
+                            if not anom_row.empty:
+                                a_norm_z = float(anom_row["norm_z"].values[0])
+                                a_iso_score = float(anom_row["isolation_score"].values[0])
+
+                                if len(df_valid) < 30:
+                                    combined = a_norm_z
+                                else:
+                                    combined = w_z * a_norm_z + w_iso * a_iso_score
+
+                                new_severity = 100.0 / (1.0 + np.exp(-12.0 * (combined - 0.5)))
+                                anom.severity_score = new_severity
+
+    await db.commit()
+    await db.refresh(anomaly)
+    return anomaly
 
 async def get_metric_timeseries(
     db: AsyncSession,

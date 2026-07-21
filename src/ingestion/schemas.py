@@ -21,6 +21,7 @@ class MetricResponseSchema(BaseModel):
     direction_good: DirectionGoodEnum
     sensitivity: SensitivityEnum
     grain: GrainEnum
+    z_score_weight: float
     created_at: datetime
 
 class ColumnMappingSchema(BaseModel):

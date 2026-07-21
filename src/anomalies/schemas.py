@@ -32,3 +32,6 @@ class AnomalyResponseSchema(BaseModel):
 
 class AnomalyDetailResponseSchema(AnomalyResponseSchema):
     pass
+
+class AnomalyFeedbackSchema(BaseModel):
+    status: AnomalyStatusEnum
