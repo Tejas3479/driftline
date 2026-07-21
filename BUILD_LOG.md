@@ -17,3 +17,10 @@
 - Demo Dataset: Created synthetic dataset at `demo_data/daily_revenue.csv` (60 days: 2026-01-01 to 2026-03-01, 1 dimension column `channel` with 3 values `organic`, `paid`, `referral`, totaling 180 rows).
 - Decisions: Registered `python-multipart` for FastAPI file uploads; added `tests/conftest.py` with `NullPool` database dependency overrides for event-loop isolation in `pytest-asyncio`.
 - Next session context: Data ingestion is fully operational and verified (6/6 tests passing). Ready for Session 4 (anomaly detection algorithm & daily rollup pipeline).
+
+## Session 4: Time Series Decomposition & Daily Rollups
+- Implemented time series rolling window trend/seasonal/residual decomposition pipeline using Pandas/NumPy in `src/anomalies/service.py`.
+- Configured marginal per-dimension rollup logic to compute total series (`{}`) and single-dimension marginal rollups separately (e.g. `{"channel": "organic"}`), preventing sparse cross-product baseline drift.
+- Added `dimension_values` `JSONB` column to `DailyRollup` model with a unique constraint index `uq_daily_rollups_metric_date_dims` and generated Alembic migration `cd678bef8820_add_dimension_values_to_daily_rollups.py`.
+- Decisions: Configured continuous daily calendar reindexing before rolling calculation; enforced strict reconstruction validation raising `ValueError` if the decomposition invariant check fails; ensured complete historical recompute-and-overwrite of metrics on rerun.
+- Next session context: All rollups are applied and validated, with 9/9 tests passing. Time series data is fully pre-processed and ready for Session 5 (anomaly detection algorithms and IsolationForest configuration).

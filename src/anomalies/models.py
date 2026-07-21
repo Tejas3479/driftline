@@ -3,6 +3,7 @@ from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import String, Date, Float, Text, DateTime, ForeignKey, Index, Enum as SQLEnum, func
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 from src.db.base import Base
 
 class AnomalyTypeEnum(str, enum.Enum):
@@ -27,9 +28,11 @@ class DailyRollup(Base):
     trend: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     seasonal: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     residual: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    dimension_values: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default='{}')
 
     __table_args__ = (
         Index("ix_daily_rollups_metric_date", "metric_id", "date"),
+        Index("uq_daily_rollups_metric_date_dims", "metric_id", "date", "dimension_values", unique=True),
     )
 
 class Anomaly(Base):

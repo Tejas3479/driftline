@@ -352,6 +352,10 @@ async def confirm_and_persist_observations(
 
     await db.commit()
 
+    # Trigger daily rollup and decomposition calculation
+    from src.anomalies.service import run_daily_rollup_and_decomposition
+    await run_daily_rollup_and_decomposition(db, metric_id)
+
     # Get total count
     total_obs_res = await db.execute(
         select(Observation).where(Observation.metric_id == metric_id)
