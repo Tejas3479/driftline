@@ -1,0 +1,1 @@
+# Digests domain module
