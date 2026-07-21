@@ -2,14 +2,15 @@ import io
 import pytest
 import numpy as np
 import pandas as pd
-from datetime import date, timedelta
-from sqlalchemy import select, update
+from datetime import date, datetime, timedelta
+from sqlalchemy import select, update, delete
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 import httpx
 
 from main import app
 from src.db.session import DATABASE_URL
+from src.ingestion.models import Metric
 from src.anomalies.models import DailyRollup, Anomaly, AnomalyStatusEnum, AnomalyTypeEnum
 from src.anomalies.service import decompose_timeseries, detect_and_persist_anomalies
 
@@ -178,14 +179,13 @@ async def test_sensitivity_thresholds():
         metric_id = metric_res.json()["id"]
 
         # Generate 60 days of daily values
-        # All residuals will be perfectly stable (value = 100), except a single injected spike
-        # at index 35. Robust z-score is designed to be around 3.0.
-        # We achieve this by inserting 100 on all days, and 125 on index 35.
+        # All residuals will be stable (value = 100), except a single injected spike
+        # at index 35 of 105.0. Robust z-score will be around 3.25.
         rows = []
         start_d = date(2026, 1, 1)
         for i in range(60):
             d = start_d + timedelta(days=i)
-            val = 125.0 if i == 35 else 100.0
+            val = 105.0 if i == 35 else 100.0
             rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
 
         # Confirm data to trigger rollup and anomaly detection
@@ -197,7 +197,7 @@ async def test_sensitivity_thresholds():
             "replace": True
         })
 
-        # At medium sensitivity (threshold 2.5), the spike (robust z ~ 3.0) should be flagged
+        # At medium sensitivity (threshold 2.5), the spike (robust z ~ 3.25) should be flagged
         anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
         anoms = anom_res.json()
         assert len(anoms) == 1
@@ -246,12 +246,12 @@ async def test_level_shift_classification():
         })
         metric_id = metric_res.json()["id"]
 
-        # Step shift from 100 to 500 at day 30, with 14 days padding on both sides
+        # Step shift from 100 to 500 at day 60, with 150 days total length to ensure ample padding
         rows = []
         start_d = date(2026, 1, 1)
-        for i in range(60):
+        for i in range(150):
             d = start_d + timedelta(days=i)
-            val = 500.0 if i >= 30 else 100.0
+            val = 500.0 if i >= 60 else 100.0
             rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
 
         await client.post(f"/metrics/{metric_id}/data/confirm", json={
@@ -279,17 +279,19 @@ async def test_volatility_classification():
         })
         metric_id = metric_res.json()["id"]
 
-        # Flat series at 100, but index 30 has a massive burst of variance (rolling standard deviation spikes)
-        # while keeping local mean close to 100.
+        # Flat series of 120 days with small noise, but around index 60 there is a burst of variance
+        # with alternating large deviations (+150, -150) so the sum of deviations is exactly 0.
         rows = []
         start_d = date(2026, 1, 1)
         np.random.seed(42)
-        for i in range(60):
+        noise = np.random.normal(0, 5.0, size=120)
+        for i in range(120):
             d = start_d + timedelta(days=i)
-            if i in [28, 29, 30, 31, 32]:
-                val = 100.0 + float(np.random.choice([-150.0, 150.0]))
-            else:
-                val = 100.0
+            val = 100.0 + noise[i]
+            if i in [58, 60]:
+                val += 150.0
+            elif i in [59, 61]:
+                val -= 150.0
             rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
 
         await client.post(f"/metrics/{metric_id}/data/confirm", json={
@@ -336,7 +338,8 @@ async def test_idempotency_state_preservation():
         anoms1 = anom_res1.json()
         assert len(anoms1) == 1
         anom_id = anoms1[0]["id"]
-        anom_date = anoms1[0]["date"]
+        anom_date_str = anoms1[0]["date"]
+        anom_date = datetime.strptime(anom_date_str, "%Y-%m-%d").date()
 
         # Edit status and explanation text in DB
         test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
