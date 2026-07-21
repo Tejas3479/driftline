@@ -32,3 +32,12 @@
 - Added database unique index `uq_anomalies_metric_date` on `(metric_id, date)` and migration `db622994a7d7_add_unique_to_anomalies.py` (which includes SQL-level deduplication).
 - Decisions: Integrated SQL conditional `CASE` statements to freeze anomaly categories (`type`, `z_score`, `severity_score`, `isolation_score`) older than `max_date - 14 days` to preserve user-reviewed details; implemented low-variance baseline floor scaling and early return skip for all-zero/flat metrics; populated `severity_score` with $|z|$ and `isolation_score` with `0.0` as temporary placeholders pending Session 7.
 - Next session context: Anomaly detection is fully operational and integrated with ingestion. Exposes `GET /metrics/{id}/anomalies` and `GET /anomalies/{id}` endpoints. 15/15 tests passing. Ready for Session 6 (FastAPI scheduling and APScheduler integration).
+
+## Session 6: Metrics Dashboard (Overview & Time-Series Detail Pages)
+- Added new `GET /metrics` backend endpoint in `src/ingestion/router.py`/`service.py` to list all metrics (with notes to add tenant scoping context in Session 19).
+- Scoped CORS origins in `main.py` strictly to `http://localhost:3000` (omitting credentials).
+- Extracted a single shared helper function `compute_scaled_mad(residuals, values) -> Optional[float]` in `src/anomalies/service.py` to prevent statistical calculation drift.
+- Extended `/metrics/{id}/timeseries` to return the stable pre-computed `mad` value of the entire metric timeseries history.
+- Built dynamic frontend pages and components: Overview list card layout with inline SVG sparklines, warning banners with expected-value check division-by-zero guards, and a dynamic-imported `react-plotly.js` component with range filtering, shaded baseline bounds (`trend ± MAD`), and type-distinct markers/lines.
+- Wrote frontend Vitest unit test suites mock-verifying rendering, banners, filtering, and Plotly marker shapes counts, and added `test_timeseries_mad_consistency` backend test.
+- Next session context: Overview dashboard and time-series detail page are fully operational. 16/16 backend tests passing, 3/3 frontend tests passing. Ready for Session 7 (IsolationForest anomaly classification & real severity scoring).

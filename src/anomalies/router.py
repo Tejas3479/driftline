@@ -16,9 +16,10 @@ async def get_metric_timeseries_endpoint(
     end: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    points = await service.get_metric_timeseries(db, id, start, end)
+    points, mad = await service.get_metric_timeseries(db, id, start, end)
     return {
         "metric_id": id,
+        "mad": mad,
         "points": points
     }
 

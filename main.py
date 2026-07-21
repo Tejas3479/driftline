@@ -11,11 +11,21 @@ async def lifespan(app: FastAPI):
     # Shutdown actions
     await engine.dispose()
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="Driftline API",
     description="Anomaly detection, root-cause driver analysis, and short-horizon forecasting",
     version="0.1.0",
     lifespan=lifespan,
+)
+
+# NOTE for Session 19: Revisit CORS origins config before production deployment
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(ingestion_router)

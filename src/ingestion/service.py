@@ -368,3 +368,11 @@ async def confirm_and_persist_observations(
         "updated_count": updated_count,
         "total_observations": total_obs
     }
+
+async def list_metrics(db: AsyncSession) -> List[Metric]:
+    """
+    Retrieve all metric configurations.
+    NOTE for Session 19: Add workspace/tenant scoping filters once authentication is introduced.
+    """
+    result = await db.execute(select(Metric).order_by(Metric.id))
+    return list(result.scalars().all())

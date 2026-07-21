@@ -448,3 +448,48 @@ async def test_low_variance_no_false_positives():
         # Verify that MAD scaling baseline floor prevents the tiny fluctuation from being flagged as anomaly
         anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
         assert len(anom_res.json()) == 0
+
+@pytest.mark.asyncio
+async def test_timeseries_mad_consistency():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Create metric and seed 60 days of data
+        metric_res = await client.post("/metrics", json={
+            "name": "MAD Consistency Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            # Add a clear weekly seasonal + linear trend pattern so residuals exist and are non-flat
+            val = 100.0 + (i % 7) * 10.0 + i * 0.5
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # Fetch full timeseries
+        full_res = await client.get(f"/metrics/{metric_id}/timeseries")
+        full_data = full_res.json()
+        full_mad = full_data["mad"]
+        assert full_mad is not None
+        assert full_mad > 0.0
+
+        # Fetch filtered timeseries (last 7 days)
+        start_filter = (start_d + timedelta(days=53)).isoformat()
+        filtered_res = await client.get(f"/metrics/{metric_id}/timeseries?start={start_filter}")
+        filtered_data = filtered_res.json()
+        filtered_mad = filtered_data["mad"]
+
+        # Assert that the MAD value remains identical regardless of start/end filtering
+        assert filtered_mad == full_mad
+        assert len(filtered_data["points"]) == 7
+

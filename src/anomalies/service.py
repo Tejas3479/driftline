@@ -1,6 +1,6 @@
 import json
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from sqlalchemy import select, delete, case
@@ -168,6 +168,25 @@ async def get_metric(db: AsyncSession, metric_id: int) -> Optional[Metric]:
     result = await db.execute(select(Metric).where(Metric.id == metric_id))
     return result.scalar_one_or_none()
 
+def compute_scaled_mad(residuals: np.ndarray, values: np.ndarray) -> Optional[float]:
+    """
+    Computes the scaled Median Absolute Deviation (MAD) over a series of residuals and values.
+    Returns None if the series is empty, or if the early return flat-series condition is met (mad_scaled < 1e-9).
+    """
+    if len(residuals) == 0:
+        return None
+    med_res = np.median(residuals)
+    abs_devs = np.abs(residuals - med_res)
+    mad = np.median(abs_devs)
+
+    med_val = np.median(np.abs(values))
+    mad_floor = 0.01 * med_val
+
+    mad_scaled = max(mad, mad_floor)
+    if mad_scaled < 1e-9:
+        return None
+    return float(mad_scaled)
+
 async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None:
     """
     Computes robust z-scores on residuals using scaled MAD, maps sensitivity,
@@ -201,23 +220,17 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
     df.sort_values("date", inplace=True)
     df.reset_index(drop=True, inplace=True)
 
-    # 2. Compute MAD and MAD_scaled
+    # 2. Compute MAD and MAD_scaled via shared helper
     residuals = df["residual"].values
-    med_res = np.median(residuals)
-    abs_devs = np.abs(residuals - med_res)
-    mad = np.median(abs_devs)
-
     vals = df["value_total"].values
-    med_val = np.median(np.abs(vals))
-    mad_floor = 0.01 * med_val
-
-    mad_scaled = max(mad, mad_floor)
+    mad_scaled = compute_scaled_mad(residuals, vals)
 
     # Early Return for flat/zero series
-    if mad_scaled < 1e-9:
+    if mad_scaled is None:
         return
 
     # 3. Compute robust z-score
+    med_res = np.median(residuals)
     df["robust_z"] = 0.6745 * (df["residual"] - med_res) / mad_scaled
 
     # 4. Get metric sensitivity threshold
@@ -357,11 +370,28 @@ async def get_metric_timeseries(
     metric_id: int,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
-) -> List[TimeseriesPointSchema]:
+) -> Tuple[List[TimeseriesPointSchema], Optional[float]]:
     """
-    Returns the total rollup points for the requested metric and date range.
-    Total rollup points have dimension_values == {}.
+    Returns the total rollup points for the requested metric and date range,
+    along with the historical scaled MAD calculated over the entire metric history.
     """
+    # 1. Fetch entire history of total rollups to compute stable historical MAD
+    hist_query = select(DailyRollup).where(
+        DailyRollup.metric_id == metric_id,
+        DailyRollup.dimension_values == {},
+        DailyRollup.trend.is_not(None)
+    ).order_by(DailyRollup.date)
+    
+    hist_res = await db.execute(hist_query)
+    all_rollups = hist_res.scalars().all()
+    
+    mad_val = None
+    if all_rollups:
+        residuals = np.array([r.residual for r in all_rollups if r.residual is not None])
+        vals = np.array([r.value_total for r in all_rollups])
+        mad_val = compute_scaled_mad(residuals, vals)
+
+    # 2. Fetch the filtered rollups for the requested range
     query = select(DailyRollup).where(
         DailyRollup.metric_id == metric_id,
         DailyRollup.dimension_values == {}
@@ -385,4 +415,4 @@ async def get_metric_timeseries(
             residual=r.residual,
             dimension_values=r.dimension_values
         ))
-    return points
+    return points, mad_val

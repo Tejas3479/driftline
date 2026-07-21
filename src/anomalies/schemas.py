@@ -13,6 +13,7 @@ class TimeseriesPointSchema(BaseModel):
 
 class TimeseriesResponseSchema(BaseModel):
     metric_id: int
+    mad: Optional[float] = None
     points: List[TimeseriesPointSchema]
 
 class AnomalyResponseSchema(BaseModel):

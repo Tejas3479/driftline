@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
@@ -11,6 +12,12 @@ from src.ingestion.schemas import (
 import src.ingestion.service as service
 
 router = APIRouter()
+
+@router.get("/metrics", response_model=List[MetricResponseSchema])
+async def list_metrics_endpoint(
+    db: AsyncSession = Depends(get_db)
+):
+    return await service.list_metrics(db)
 
 @router.post("/metrics", response_model=MetricResponseSchema, status_code=status.HTTP_201_CREATED)
 async def create_metric_endpoint(
