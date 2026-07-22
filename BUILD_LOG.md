@@ -73,3 +73,12 @@
 - Wrote unit & component tests in `tests/test_anomalies.py`, `tests/test_drivers.py`, and `frontend/__tests__/anomalies.test.tsx`.
 - Next session context: Anomaly detail page and root-cause driver visualization are fully operational. 27/27 backend tests passing, 7/7 frontend tests passing. Ready for Session 10 (Short-horizon quantile forecasting & LightGBM/XGBoost models).
 
+## Session 10: Short-Horizon Quantile Forecasting (LightGBM / XGBoost)
+- Built `src/forecasting/` domain (`models.py`, `schemas.py`, `service.py`) supporting multi-quantile forecasting ($p_{10}, p_{50}, p_{90}$) for 7, 14, and 30-day horizons. Defaulted to `lightgbm` backend (`LGBMRegressor(objective='quantile')`) with configurable cross-check support for `xgboost` (`XGBRegressor(objective='reg:quantileerror', tree_method='hist')`).
+- Implemented trailing-only feature engineering (`lag_1..28`, `rolling_mean_7/28`, `rolling_std_7`, `day_of_week/month`, `month`, `trend_index`) using `.shift(1)` ahead of rolling calculations to eliminate look-ahead leakage.
+- Enforced $p_{10} \le p_{50} \le p_{90}$ non-crossing invariant via quantile rearrangement. Reconciled segment forecasts with total $p_{50}$ scaling while preserving raw uncertainty half-widths ($\Delta_{p10}, \Delta_{p90}$) to guarantee both sum equality and non-crossing automatically by construction.
+- Added scale-relative denominator guard ($\sum_s \hat{Y}_{s, p50} < 0.01 \times |\hat{Y}_{total, p50}|$), a 60-day minimum history exception hook, and updated `Forecast.dimension_values` to `JSONB` with key-sorted JSON serialization and PostgreSQL `ON CONFLICT DO UPDATE` upsert semantics.
+- Wrote 7 comprehensive unit/integration tests in `tests/test_forecasting.py`. All 34 backend pytest tests passing, all 7 frontend Vitest tests passing.
+- Next session context: Quantile forecasting engine (LightGBM/XGBoost backends, non-crossing, segment reconciliation, JSONB upsert) is complete. Ready for Session 11 (Backtesting pipeline, evaluation metrics & naive benchmark).
+
+

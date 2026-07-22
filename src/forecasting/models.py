@@ -1,5 +1,6 @@
 from datetime import date, datetime
-from sqlalchemy import String, Date, Float, Integer, DateTime, ForeignKey, Index, func
+from sqlalchemy import String, Date, Float, Integer, DateTime, ForeignKey, Index, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from src.db.base import Base
 
@@ -8,6 +9,7 @@ class Forecast(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     metric_id: Mapped[int] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False)
+    dimension_values: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}", default=dict)
     forecast_date: Mapped[date] = mapped_column(Date, nullable=False)
     horizon_days: Mapped[int] = mapped_column(Integer, nullable=False)
     p10: Mapped[float] = mapped_column(Float, nullable=False)
@@ -18,6 +20,7 @@ class Forecast(Base):
 
     __table_args__ = (
         Index("ix_forecasts_metric_date", "metric_id", "forecast_date"),
+        UniqueConstraint("metric_id", "dimension_values", "forecast_date", "horizon_days", name="uq_forecasts_metric_dim_date_horizon"),
     )
 
 class ForecastAccuracyLog(Base):
