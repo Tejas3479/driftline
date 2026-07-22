@@ -22,6 +22,7 @@ class ForecastResultSchema(BaseModel):
     horizon_days: int
     as_of_date: date
     model_version: str
+    low_confidence: bool = False
     forecasts: List[ForecastPointSchema]
 
 class ForecastGenerateRequestSchema(BaseModel):
@@ -29,3 +30,25 @@ class ForecastGenerateRequestSchema(BaseModel):
     horizon_days: int = Field(default=30, ge=1, le=90)
     model_backend: str = Field(default="lightgbm", pattern="^(lightgbm|xgboost)$")
     save_to_db: bool = True
+
+class AccuracyPointSchema(BaseModel):
+    date: date
+    predicted_p50: float
+    actual: float
+    abs_error: float
+    abs_pct_error: Optional[float] = None
+    in_bounds: Optional[bool] = None
+    predicted_p10: Optional[float] = None
+    predicted_p90: Optional[float] = None
+    used_ml_model: bool = True
+
+class AccuracyResponseSchema(BaseModel):
+    metric_id: int
+    horizon_days: int
+    model_backend: str
+    mape: Optional[float] = None
+    mae: Optional[float] = None
+    coverage_pct: Optional[float] = None
+    total_evaluations: int
+    ml_evaluations: int
+    points: List[AccuracyPointSchema]

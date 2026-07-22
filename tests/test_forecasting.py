@@ -295,3 +295,191 @@ async def test_jsonb_upsert_semantics():
         assert count2 == 7
         
     await test_engine.dispose()
+
+@pytest.mark.asyncio
+async def test_backtest_does_not_pollute_live_forecasts_table():
+    """
+    Asserts running walk-forward backtest calls save_to_db=False and leaves the live forecasts table untouched.
+    """
+    test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    TestAsyncSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
+    
+    async with TestAsyncSessionLocal() as db_session:
+        res_ws = await db_session.execute(select(Workspace).limit(1))
+        ws = res_ws.scalar_one_or_none()
+        if not ws:
+            ws = Workspace(name="Clean WS")
+            db_session.add(ws)
+            await db_session.flush()
+            
+        metric = Metric(
+            workspace_id=ws.id,
+            name="Clean Forecast Metric",
+            unit="USD",
+            direction_good="up_is_good",
+            sensitivity="medium",
+            grain="daily",
+        )
+        db_session.add(metric)
+        await db_session.flush()
+        
+        start_d = date(2026, 1, 1)
+        for i in range(75):
+            d = start_d + timedelta(days=i)
+            r = DailyRollup(
+                metric_id=metric.id,
+                date=d,
+                value_total=200.0 + i,
+                trend=200.0 + i,
+                seasonal=0.0,
+                residual=0.0,
+                dimension_values={},
+            )
+            db_session.add(r)
+        await db_session.flush()
+        
+        # Check initial live forecasts count is 0
+        stmt = select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric.id)
+        count_before = (await db_session.execute(stmt)).scalar()
+        assert count_before == 0
+        
+        # Run walk-forward backtest
+        from src.forecasting.service import run_walk_forward_backtest
+        await run_walk_forward_backtest(metric.id, db_session, horizon_days=7, max_weeks=4)
+        
+        # Assert live forecasts count is STILL 0 (backtest did NOT pollute live forecasts table)
+        count_after = (await db_session.execute(stmt)).scalar()
+        assert count_after == 0
+        
+    await test_engine.dispose()
+
+@pytest.mark.asyncio
+async def test_cold_start_fallback_and_low_confidence_flag():
+    """
+    Asserts a metric with <60 days history triggers seasonal-naive cold-start fallback and low_confidence=True,
+    while a metric with >=60 days uses ML model path and low_confidence=False.
+    """
+    test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    TestAsyncSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
+    
+    async with TestAsyncSessionLocal() as db_session:
+        res_ws = await db_session.execute(select(Workspace).limit(1))
+        ws = res_ws.scalar_one_or_none()
+        if not ws:
+            ws = Workspace(name="ColdStart WS")
+            db_session.add(ws)
+            await db_session.flush()
+            
+        # 1. Young Metric (< 60 days history)
+        young_metric = Metric(
+            workspace_id=ws.id,
+            name="Young Metric",
+            unit="USD",
+            direction_good="up_is_good",
+            sensitivity="medium",
+            grain="daily",
+        )
+        db_session.add(young_metric)
+        await db_session.flush()
+        
+        start_d = date(2026, 1, 1)
+        for i in range(40):  # 40 days history < 60 days
+            d = start_d + timedelta(days=i)
+            r = DailyRollup(
+                metric_id=young_metric.id,
+                date=d,
+                value_total=100.0 + (i % 7) * 5.0,
+                trend=100.0,
+                seasonal=0.0,
+                residual=0.0,
+                dimension_values={},
+            )
+            db_session.add(r)
+        await db_session.flush()
+        
+        young_res = await generate_multi_step_forecast(young_metric.id, db_session, horizon_days=7, save_to_db=False)
+        assert young_res["low_confidence"] is True
+        assert young_res["model_version"] == "naive-seasonal-v1"
+        for d, f_dict in young_res["total_forecasts"].items():
+            assert f_dict["p10"] <= f_dict["p50"] <= f_dict["p90"]
+            
+        # 2. Mature Metric (>= 60 days history)
+        mature_metric = Metric(
+            workspace_id=ws.id,
+            name="Mature Metric",
+            unit="USD",
+            direction_good="up_is_good",
+            sensitivity="medium",
+            grain="daily",
+        )
+        db_session.add(mature_metric)
+        await db_session.flush()
+        
+        for i in range(70):  # 70 days history >= 60 days
+            d = start_d + timedelta(days=i)
+            r = DailyRollup(
+                metric_id=mature_metric.id,
+                date=d,
+                value_total=100.0 + i * 0.5,
+                trend=100.0 + i * 0.5,
+                seasonal=0.0,
+                residual=0.0,
+                dimension_values={},
+            )
+            db_session.add(r)
+        await db_session.flush()
+        
+        mature_res = await generate_multi_step_forecast(mature_metric.id, db_session, horizon_days=7, save_to_db=False)
+        assert mature_res["low_confidence"] is False
+        assert mature_res["model_version"] == "lightgbm-v1"
+        for d, f_dict in mature_res["total_forecasts"].items():
+            assert f_dict["p10"] <= f_dict["p50"] <= f_dict["p90"]
+            
+    await test_engine.dispose()
+
+@pytest.mark.asyncio
+async def test_forecast_accuracy_endpoint():
+    """
+    Tests GET /metrics/{id}/forecast and GET /metrics/{id}/accuracy endpoints via httpx.AsyncClient.
+    """
+    import httpx
+    from main import app
+    
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # Create metric
+        m_res = await client.post("/metrics", json={"name": "API Forecast Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_id = m_res.json()["id"]
+        
+        # Confirm 80 days of continuous data
+        start_d = date(2026, 1, 1)
+        rows = []
+        for i in range(80):
+            d = start_d + timedelta(days=i)
+            val = 200.0 + i * 0.5 + (i % 7) * 3.0
+            rows.append({"date": d.isoformat(), "revenue": val})
+            
+        confirm_res = await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "rows": rows})
+        assert confirm_res.status_code == 200
+        
+        # Query GET /metrics/{id}/forecast
+        fc_res = await client.get(f"/metrics/{metric_id}/forecast?horizon=14")
+        assert fc_res.status_code == 200
+        fc_data = fc_res.json()
+        assert fc_data["metric_id"] == metric_id
+        assert fc_data["horizon_days"] == 14
+        assert fc_data["low_confidence"] is False
+        assert len(fc_data["forecasts"]) == 14
+        
+        # Query GET /metrics/{id}/accuracy
+        acc_res = await client.get(f"/metrics/{metric_id}/accuracy?horizon=7")
+        assert acc_res.status_code == 200
+        acc_data = acc_res.json()
+        assert acc_data["metric_id"] == metric_id
+        assert acc_data["mape"] is not None
+        assert acc_data["mape"] >= 0.0
+        assert acc_data["coverage_pct"] is not None
+        assert 0.0 <= acc_data["coverage_pct"] <= 1.0
+        assert len(acc_data["points"]) > 0
+        
+        print(f"\n>>> DEMO METRIC OBSERVED BACKTEST MAPE: {acc_data['mape']:.4f} ({acc_data['mape']*100:.2f}%) <<<")
+

@@ -14,8 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.ingestion.models import Metric
 from src.anomalies.models import DailyRollup
 from src.anomalies.service import decompose_timeseries
-from src.forecasting.models import Forecast
-from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema
+from src.forecasting.models import Forecast, ForecastAccuracyLog
+from src.forecasting.schemas import (
+    ForecastPointSchema,
+    ForecastResultSchema,
+    AccuracyPointSchema,
+    AccuracyResponseSchema,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +75,6 @@ def build_forecasting_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # Trend feature
     if "trend" in df.columns and df["trend"].notnull().any():
-        # Fill leading NaNs in trend with first valid trend value
         df["trend_index"] = df["trend"].bfill().ffill()
     else:
         df["trend_index"] = np.arange(len(df), dtype=float)
@@ -87,7 +91,6 @@ def train_quantile_models(
     if len(y) < 60:
         raise ValueError("Insufficient history for ML forecasting: minimum 60 days required")
         
-    # Drop rows where lag_28 or target is NaN
     valid_mask = X[FEATURE_COLUMNS].notnull().all(axis=1) & y.notnull()
     X_train = X.loc[valid_mask, FEATURE_COLUMNS]
     y_train = y.loc[valid_mask]
@@ -136,8 +139,6 @@ def enforce_quantile_non_crossing(
     p90_arr = np.atleast_1d(p90)
     
     stacked = np.column_stack([p10_arr, p50_arr, p90_arr])
-    
-    # Check if any row violated non-crossing
     crossed_mask = (stacked[:, 0] > stacked[:, 1]) | (stacked[:, 1] > stacked[:, 2])
     if np.any(crossed_mask):
         logger.warning("Quantile crossing detected in %d predictions; applying quantile rearrangement sorting.", np.sum(crossed_mask))
@@ -158,10 +159,6 @@ def reconcile_segment_forecasts(
       - p50 is scaled by r_50 = total_p50 / sum(raw_p50_s)
       - Raw uncertainty half-widths delta_p10 = raw_p50 - raw_p10 and delta_p90 = raw_p90 - raw_p50 are preserved
       - Reconciled p10 = rec_p50 - delta_p10, Reconciled p90 = rec_p50 + delta_p90
-    
-    Guarantees:
-      1. sum(rec_p50_s) == total_p50
-      2. rec_p10 <= rec_p50 <= rec_p90 per segment automatically by construction!
     """
     if not segment_forecasts_map:
         return {}
@@ -170,20 +167,17 @@ def reconcile_segment_forecasts(
         seg_key: {} for seg_key in segment_forecasts_map
     }
     
-    # Group segment keys by dimension (e.g. 'channel:paid' -> dimension 'channel')
     dim_groups: Dict[str, List[str]] = {}
     for seg_key in segment_forecasts_map:
         dim = seg_key.split(":")[0] if ":" in seg_key else "default"
         dim_groups.setdefault(dim, []).append(seg_key)
         
-    # Reconcile each target date across each dimension group
     for target_date, total_dict in total_forecasts.items():
         total_p50 = total_dict["p50"]
         
         for dim, seg_keys in dim_groups.items():
             seg_p50_sum = sum(segment_forecasts_map[s][target_date]["p50"] for s in seg_keys)
             
-            # Scale-relative denominator guard: if sum is < 1% of total magnitude or < 1e-4, allocate equally
             if abs(seg_p50_sum) < 0.01 * abs(total_p50) or abs(seg_p50_sum) < 1e-4:
                 r_50 = 1.0 / len(seg_keys)
                 is_equal_alloc = True
@@ -196,21 +190,17 @@ def reconcile_segment_forecasts(
                 raw_p50 = segment_forecasts_map[s][target_date]["p50"]
                 raw_p90 = segment_forecasts_map[s][target_date]["p90"]
                 
-                # Raw uncertainty band half-widths
                 delta_p10 = max(0.0, raw_p50 - raw_p10)
                 delta_p90 = max(0.0, raw_p90 - raw_p50)
                 
-                # Reconciled p50
                 if is_equal_alloc:
                     rec_p50 = total_p50 * r_50
                 else:
                     rec_p50 = raw_p50 * r_50
                     
-                # Reconciled p10 and p90 keeping uncertainty band half-widths
                 rec_p10 = rec_p50 - delta_p10
                 rec_p90 = rec_p50 + delta_p90
                 
-                # Guarantee non-crossing
                 rec_p10, rec_p50, rec_p90 = enforce_quantile_non_crossing(rec_p10, rec_p50, rec_p90)
                 
                 reconciled_map[s][target_date] = {
@@ -226,12 +216,14 @@ async def generate_multi_step_forecast(
     session: AsyncSession,
     horizon_days: int = 30,
     model_backend: str = "lightgbm",
-    save_to_db: bool = True
+    save_to_db: bool = True,
+    cutoff_date: Optional[date] = None,
 ) -> Dict[str, Any]:
     """
     Generates 7, 14, and 30-day quantile forecasts for total metric and per-segment metrics.
-    Reconciles per-segment forecasts to match total forecast p50.
-    Persists forecasts to DB using PostgreSQL ON CONFLICT DO UPDATE upsert semantics.
+    If history < 60 days, falls back to seasonal-naive with trend adjustment and sets low_confidence = True.
+    If history >= 60 days, fits ML quantile models and sets low_confidence = False.
+    Respects save_to_db parameter to prevent live database pollution during backtest runs.
     """
     # 1. Query metric
     stmt_metric = select(Metric).where(Metric.id == metric_id)
@@ -240,20 +232,19 @@ async def generate_multi_step_forecast(
     if not metric:
         raise ValueError(f"Metric {metric_id} not found")
         
-    # 2. Query total daily rollups (dimension_values == {})
-    stmt_rollups = (
-        select(DailyRollup)
-        .where(DailyRollup.metric_id == metric_id)
-        .order_by(DailyRollup.date.asc())
-    )
+    # 2. Query rollups (optionally truncated by cutoff_date for backtest folds)
+    stmt_rollups = select(DailyRollup).where(DailyRollup.metric_id == metric_id)
+    if cutoff_date is not None:
+        stmt_rollups = stmt_rollups.where(DailyRollup.date <= cutoff_date)
+    stmt_rollups = stmt_rollups.order_by(DailyRollup.date.asc())
+    
     res_rollups = await session.execute(stmt_rollups)
     all_rollups = list(res_rollups.scalars().all())
     
     total_rollups = [r for r in all_rollups if not r.dimension_values or r.dimension_values == {}]
-    if len(total_rollups) < 60:
-        raise ValueError(f"Metric {metric_id} has {len(total_rollups)} days of history, minimum 60 required for ML forecasting.")
+    if len(total_rollups) == 0:
+        raise ValueError(f"Metric {metric_id} has 0 days of rollup history.")
         
-    # Convert total rollups to DataFrame
     df_total = pd.DataFrame([
         {
             "date": pd.to_datetime(r.date),
@@ -263,142 +254,90 @@ async def generate_multi_step_forecast(
         for r in total_rollups
     ]).set_index("date").sort_index()
     
-    # Fill any calendar gaps in time series
     full_idx = pd.date_range(start=df_total.index.min(), end=df_total.index.max(), freq="D")
     df_total = df_total.reindex(full_idx)
     df_total["value"] = df_total["value"].interpolate(method="linear").bfill().ffill()
     
-    # Calculate trend decomposition if missing
     if "trend" not in df_total.columns or df_total["trend"].isnull().all():
         df_total = decompose_timeseries(df_total)
         
-    # 3. Train total quantile models
-    X_total = build_forecasting_features(df_total)
-    y_total = df_total["value"]
-    
-    model_p10, model_p50, model_p90 = train_quantile_models(X_total, y_total, model_backend=model_backend)
-    
-    # Calculate trend slope over last 14 days for future trend projection
-    last_14_trends = df_total["trend"].dropna().tail(14)
-    if len(last_14_trends) >= 2:
-        trend_slope = float(last_14_trends.iloc[-1] - last_14_trends.iloc[0]) / (len(last_14_trends) - 1)
-    else:
-        trend_slope = 0.0
-    last_trend = float(df_total["trend"].dropna().iloc[-1]) if not df_total["trend"].dropna().empty else float(y_total.iloc[-1])
-    
-    # 4. Perform recursive multi-step forecasting for total metric (h = 1..30)
     as_of_date = df_total.index.max().date()
-    history_values = list(df_total["value"].values)
-    history_dates = list(df_total.index)
+    history_len = len(df_total)
     
     total_forecasts: Dict[date, Dict[str, float]] = {}
+    low_confidence = False
     
-    for h in range(1, horizon_days + 1):
-        target_date = as_of_date + timedelta(days=h)
-        target_datetime = pd.to_datetime(target_date)
+    # Check history length gate for Cold-Start Fallback vs ML Path
+    if history_len < 60:
+        # COLD-START FALLBACK PATH: Seasonal-naive with trend adjustment
+        low_confidence = True
+        model_version = "naive-seasonal-v1"
         
-        # Build feature vector for step h using single shared p50 trajectory
-        s_val = pd.Series(history_values)
-        
-        lag_1 = float(s_val.iloc[-1])
-        lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
-        lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
-        lag_28 = float(s_val.iloc[-28]) if len(s_val) >= 28 else lag_14
-        
-        rolling_mean_7 = float(s_val.tail(7).mean())
-        rolling_mean_28 = float(s_val.tail(28).mean())
-        rolling_std_7 = float(s_val.tail(7).std()) if len(s_val) >= 7 else 0.0
-        if np.isnan(rolling_std_7):
-            rolling_std_7 = 0.0
+        values = df_total["value"].values
+        mean_val = float(np.mean(values)) if len(values) > 0 else 100.0
+        residuals = df_total["value"] - df_total["trend"].fillna(df_total["value"])
+        residual_std = float(np.std(residuals)) if len(residuals) > 0 else 0.1 * mean_val
+        if np.isnan(residual_std) or residual_std < 0.05 * abs(mean_val):
+            residual_std = 0.05 * abs(mean_val)
             
-        day_of_week = target_datetime.dayofweek
-        day_of_month = target_datetime.day
-        month = target_datetime.month
-        trend_index = last_trend + trend_slope * h
-        
-        feat_df = pd.DataFrame([{
-            "lag_1": lag_1,
-            "lag_7": lag_7,
-            "lag_14": lag_14,
-            "lag_28": lag_28,
-            "rolling_mean_7": rolling_mean_7,
-            "rolling_mean_28": rolling_mean_28,
-            "rolling_std_7": rolling_std_7,
-            "day_of_week": day_of_week,
-            "day_of_month": day_of_month,
-            "month": month,
-            "trend_index": trend_index,
-        }])[FEATURE_COLUMNS]
-        
-        raw_p10 = float(model_p10.predict(feat_df)[0])
-        raw_p50 = float(model_p50.predict(feat_df)[0])
-        raw_p90 = float(model_p90.predict(feat_df)[0])
-        
-        p10, p50, p90 = enforce_quantile_non_crossing(raw_p10, raw_p50, raw_p90)
-        
-        total_forecasts[target_date] = {
-            "p10": float(p10),
-            "p50": float(p50),
-            "p90": float(p90),
-        }
-        
-        # Append p50 prediction to history values as shared pseudo-actual for step h+1
-        history_values.append(float(p50))
-        history_dates.append(target_datetime)
-
-    # 5. Process per-segment forecasts
-    segment_rollups_map: Dict[str, List[DailyRollup]] = {}
-    for r in all_rollups:
-        if r.dimension_values and r.dimension_values != {}:
-            # Sort keys for consistent serialization
-            sorted_dim = json.dumps(r.dimension_values, sort_keys=True)
-            segment_rollups_map.setdefault(sorted_dim, []).append(r)
+        last_trend = float(df_total["trend"].dropna().iloc[-1]) if not df_total["trend"].dropna().empty else mean_val
+        last_14_trends = df_total["trend"].dropna().tail(14)
+        if len(last_14_trends) >= 2:
+            trend_slope = float(last_14_trends.iloc[-1] - last_14_trends.iloc[0]) / (len(last_14_trends) - 1)
+        else:
+            trend_slope = 0.0
             
-    raw_segment_forecasts_map: Dict[str, Dict[date, Dict[str, float]]] = {}
-    
-    for seg_key, s_rollups in segment_rollups_map.items():
-        if len(s_rollups) < 60:
-            # For young segments with < 60 days history, fall back to historical volume fraction of total
-            total_hist_mean = df_total["value"].mean()
-            seg_hist_mean = np.mean([float(r.value_total) for r in s_rollups])
-            ratio = seg_hist_mean / total_hist_mean if total_hist_mean != 0 else 1.0 / len(segment_rollups_map)
+        for h in range(1, horizon_days + 1):
+            target_date = as_of_date + timedelta(days=h)
             
-            raw_segment_forecasts_map[seg_key] = {
-                t_date: {
-                    "p10": total_forecasts[t_date]["p10"] * ratio,
-                    "p50": total_forecasts[t_date]["p50"] * ratio,
-                    "p90": total_forecasts[t_date]["p90"] * ratio,
-                }
-                for t_date in total_forecasts
+            # value_{t-7} (fallback to value_{t-1} if history < 7)
+            if history_len >= 7:
+                val_t7 = float(values[-7])
+            else:
+                val_t7 = float(values[-1])
+                
+            trend_t7 = max(last_trend, 1e-4)
+            trend_t = last_trend + trend_slope * h
+            trend_ratio = trend_t / trend_t7 if trend_t7 != 0 else 1.0
+            
+            p50_naive = val_t7 * trend_ratio
+            p10_naive = p50_naive - 1.28 * residual_std
+            p90_naive = p50_naive + 1.28 * residual_std
+            
+            p10_naive, p50_naive, p90_naive = enforce_quantile_non_crossing(p10_naive, p50_naive, p90_naive)
+            
+            total_forecasts[target_date] = {
+                "p10": float(p10_naive),
+                "p50": float(p50_naive),
+                "p90": float(p90_naive),
             }
-            continue
             
-        df_seg = pd.DataFrame([
-            {
-                "date": pd.to_datetime(r.date),
-                "value": float(r.value_total),
-                "trend": float(r.trend) if r.trend is not None else np.nan,
-            }
-            for r in s_rollups
-        ]).set_index("date").sort_index()
+        reconciled_segment_forecasts_map = {}
+    else:
+        # FULL ML MODEL PATH
+        low_confidence = False
+        model_version = f"{model_backend}-v1"
         
-        df_seg = df_seg.reindex(full_idx)
-        df_seg["value"] = df_seg["value"].interpolate(method="linear").bfill().ffill()
+        X_total = build_forecasting_features(df_total)
+        y_total = df_total["value"]
         
-        X_seg = build_forecasting_features(df_seg)
-        y_seg = df_seg["value"]
+        model_p10, model_p50, model_p90 = train_quantile_models(X_total, y_total, model_backend=model_backend)
         
-        s_m10, s_m50, s_m90 = train_quantile_models(X_seg, y_seg, model_backend=model_backend)
+        last_14_trends = df_total["trend"].dropna().tail(14)
+        if len(last_14_trends) >= 2:
+            trend_slope = float(last_14_trends.iloc[-1] - last_14_trends.iloc[0]) / (len(last_14_trends) - 1)
+        else:
+            trend_slope = 0.0
+        last_trend = float(df_total["trend"].dropna().iloc[-1]) if not df_total["trend"].dropna().empty else float(y_total.iloc[-1])
         
-        seg_history_vals = list(df_seg["value"].values)
-        seg_forecasts: Dict[date, Dict[str, float]] = {}
+        history_values = list(df_total["value"].values)
+        history_dates = list(df_total.index)
         
         for h in range(1, horizon_days + 1):
             target_date = as_of_date + timedelta(days=h)
             target_datetime = pd.to_datetime(target_date)
             
-            s_val = pd.Series(seg_history_vals)
-            
+            s_val = pd.Series(history_values)
             lag_1 = float(s_val.iloc[-1])
             lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
             lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
@@ -413,7 +352,7 @@ async def generate_multi_step_forecast(
             day_of_week = target_datetime.dayofweek
             day_of_month = target_datetime.day
             month = target_datetime.month
-            trend_index = float(s_val.iloc[-1])
+            trend_index = last_trend + trend_slope * h
             
             feat_df = pd.DataFrame([{
                 "lag_1": lag_1,
@@ -429,31 +368,120 @@ async def generate_multi_step_forecast(
                 "trend_index": trend_index,
             }])[FEATURE_COLUMNS]
             
-            s_raw_10 = float(s_m10.predict(feat_df)[0])
-            s_raw_50 = float(s_m50.predict(feat_df)[0])
-            s_raw_90 = float(s_m90.predict(feat_df)[0])
+            raw_p10 = float(model_p10.predict(feat_df)[0])
+            raw_p50 = float(model_p50.predict(feat_df)[0])
+            raw_p90 = float(model_p90.predict(feat_df)[0])
             
-            sp10, sp50, sp90 = enforce_quantile_non_crossing(s_raw_10, s_raw_50, s_raw_90)
+            p10, p50, p90 = enforce_quantile_non_crossing(raw_p10, raw_p50, raw_p90)
             
-            seg_forecasts[target_date] = {
-                "p10": float(sp10),
-                "p50": float(sp50),
-                "p90": float(sp90),
+            total_forecasts[target_date] = {
+                "p10": float(p10),
+                "p50": float(p50),
+                "p90": float(p90),
             }
-            seg_history_vals.append(float(sp50))
-            
-        raw_segment_forecasts_map[seg_key] = seg_forecasts
+            history_values.append(float(p50))
+            history_dates.append(target_datetime)
 
-    # 6. Reconcile per-segment forecasts
-    reconciled_segment_forecasts_map = reconcile_segment_forecasts(
-        total_forecasts, raw_segment_forecasts_map
-    )
-    
-    # 7. Format forecast points and persist to DB
-    model_version = f"{model_backend}-v1"
+        # Process per-segment forecasts
+        segment_rollups_map: Dict[str, List[DailyRollup]] = {}
+        for r in all_rollups:
+            if r.dimension_values and r.dimension_values != {}:
+                sorted_dim = json.dumps(r.dimension_values, sort_keys=True)
+                segment_rollups_map.setdefault(sorted_dim, []).append(r)
+                
+        raw_segment_forecasts_map: Dict[str, Dict[date, Dict[str, float]]] = {}
+        
+        for seg_key, s_rollups in segment_rollups_map.items():
+            if len(s_rollups) < 60:
+                total_hist_mean = df_total["value"].mean()
+                seg_hist_mean = np.mean([float(r.value_total) for r in s_rollups])
+                ratio = seg_hist_mean / total_hist_mean if total_hist_mean != 0 else 1.0 / len(segment_rollups_map)
+                
+                raw_segment_forecasts_map[seg_key] = {
+                    t_date: {
+                        "p10": total_forecasts[t_date]["p10"] * ratio,
+                        "p50": total_forecasts[t_date]["p50"] * ratio,
+                        "p90": total_forecasts[t_date]["p90"] * ratio,
+                    }
+                    for t_date in total_forecasts
+                }
+                continue
+                
+            df_seg = pd.DataFrame([
+                {
+                    "date": pd.to_datetime(r.date),
+                    "value": float(r.value_total),
+                    "trend": float(r.trend) if r.trend is not None else np.nan,
+                }
+                for r in s_rollups
+            ]).set_index("date").sort_index()
+            
+            df_seg = df_seg.reindex(full_idx)
+            df_seg["value"] = df_seg["value"].interpolate(method="linear").bfill().ffill()
+            
+            X_seg = build_forecasting_features(df_seg)
+            y_seg = df_seg["value"]
+            
+            s_m10, s_m50, s_m90 = train_quantile_models(X_seg, y_seg, model_backend=model_backend)
+            
+            seg_history_vals = list(df_seg["value"].values)
+            seg_forecasts: Dict[date, Dict[str, float]] = {}
+            
+            for h in range(1, horizon_days + 1):
+                target_date = as_of_date + timedelta(days=h)
+                target_datetime = pd.to_datetime(target_date)
+                
+                s_val = pd.Series(seg_history_vals)
+                lag_1 = float(s_val.iloc[-1])
+                lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
+                lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
+                lag_28 = float(s_val.iloc[-28]) if len(s_val) >= 28 else lag_14
+                
+                rolling_mean_7 = float(s_val.tail(7).mean())
+                rolling_mean_28 = float(s_val.tail(28).mean())
+                rolling_std_7 = float(s_val.tail(7).std()) if len(s_val) >= 7 else 0.0
+                if np.isnan(rolling_std_7):
+                    rolling_std_7 = 0.0
+                    
+                day_of_week = target_datetime.dayofweek
+                day_of_month = target_datetime.day
+                month = target_datetime.month
+                trend_index = float(s_val.iloc[-1])
+                
+                feat_df = pd.DataFrame([{
+                    "lag_1": lag_1,
+                    "lag_7": lag_7,
+                    "lag_14": lag_14,
+                    "lag_28": lag_28,
+                    "rolling_mean_7": rolling_mean_7,
+                    "rolling_mean_28": rolling_mean_28,
+                    "rolling_std_7": rolling_std_7,
+                    "day_of_week": day_of_week,
+                    "day_of_month": day_of_month,
+                    "month": month,
+                    "trend_index": trend_index,
+                }])[FEATURE_COLUMNS]
+                
+                s_raw_10 = float(s_m10.predict(feat_df)[0])
+                s_raw_50 = float(s_m50.predict(feat_df)[0])
+                s_raw_90 = float(s_m90.predict(feat_df)[0])
+                
+                sp10, sp50, sp90 = enforce_quantile_non_crossing(s_raw_10, s_raw_50, s_raw_90)
+                
+                seg_forecasts[target_date] = {
+                    "p10": float(sp10),
+                    "p50": float(sp50),
+                    "p90": float(sp90),
+                }
+                seg_history_vals.append(float(sp50))
+                
+            raw_segment_forecasts_map[seg_key] = seg_forecasts
+
+        reconciled_segment_forecasts_map = reconcile_segment_forecasts(
+            total_forecasts, raw_segment_forecasts_map
+        )
+        
     all_forecast_records = []
-    
-    # Total metric records
     for target_date, fc_dict in total_forecasts.items():
         h_day = (target_date - as_of_date).days
         all_forecast_records.append({
@@ -461,13 +489,13 @@ async def generate_multi_step_forecast(
             "dimension_values": {},
             "forecast_date": target_date,
             "horizon_days": h_day,
+            "model_backend": model_backend,
             "p10": fc_dict["p10"],
             "p50": fc_dict["p50"],
             "p90": fc_dict["p90"],
             "model_version": model_version,
         })
         
-    # Segment metric records
     for seg_key_json, seg_fc in reconciled_segment_forecasts_map.items():
         dim_values = json.loads(seg_key_json) if isinstance(seg_key_json, str) else seg_key_json
         for target_date, fc_dict in seg_fc.items():
@@ -477,18 +505,19 @@ async def generate_multi_step_forecast(
                 "dimension_values": dim_values,
                 "forecast_date": target_date,
                 "horizon_days": h_day,
+                "model_backend": model_backend,
                 "p10": fc_dict["p10"],
                 "p50": fc_dict["p50"],
                 "p90": fc_dict["p90"],
                 "model_version": model_version,
             })
             
+    # Persist ONLY if save_to_db is True (prevent live DB pollution during backtest runs)
     if save_to_db and all_forecast_records:
         for record in all_forecast_records:
-            # Use PostgreSQL ON CONFLICT DO UPDATE
             stmt_upsert = insert(Forecast).values(**record)
             stmt_upsert = stmt_upsert.on_conflict_do_update(
-                constraint="uq_forecasts_metric_dim_date_horizon",
+                constraint="uq_forecasts_metric_dim_date_horizon_backend",
                 set_={
                     "p10": stmt_upsert.excluded.p10,
                     "p50": stmt_upsert.excluded.p50,
@@ -504,8 +533,226 @@ async def generate_multi_step_forecast(
         "metric_id": metric_id,
         "as_of_date": as_of_date,
         "horizon_days": horizon_days,
+        "model_backend": model_backend,
         "model_version": model_version,
+        "low_confidence": low_confidence,
         "total_forecasts": total_forecasts,
         "segment_forecasts": reconciled_segment_forecasts_map,
         "records_count": len(all_forecast_records),
+    }
+
+async def run_walk_forward_backtest(
+    metric_id: int,
+    session: AsyncSession,
+    horizon_days: int = 7,
+    model_backend: str = "lightgbm",
+    max_weeks: int = 12,
+) -> Dict[str, Any]:
+    """
+    Executes expanding-window walk-forward backtest across up to 12 weekly history folds.
+    Calls the EXACT same generate_multi_step_forecast pipeline with save_to_db=False.
+    Enforces max(train_dates) < min(prediction_dates) to prevent future data leakage.
+    Derives used_ml_model directly from fold low_confidence flag.
+    Upserts evaluation results to forecast_accuracy_log in DB.
+    """
+    # 1. Query total rollups
+    stmt = (
+        select(DailyRollup)
+        .where(DailyRollup.metric_id == metric_id)
+        .order_by(DailyRollup.date.asc())
+    )
+    res = await session.execute(stmt)
+    all_rollups = list(res.scalars().all())
+    
+    total_rollups = [r for r in all_rollups if not r.dimension_values or r.dimension_values == {}]
+    if len(total_rollups) == 0:
+        raise ValueError(f"Metric {metric_id} has no rollups for backtesting.")
+        
+    rollup_date_map = {r.date: float(r.value_total) for r in total_rollups}
+    sorted_dates = sorted(rollup_date_map.keys())
+    max_date = sorted_dates[-1]
+    
+    mean_historical_val = float(np.mean(list(rollup_date_map.values())))
+    
+    accuracy_records = []
+    
+    # 2. Iterate up to max_weeks 7-day prediction folds
+    for k in range(1, max_weeks + 1):
+        pred_end_date = max_date - timedelta(days=7 * (k - 1))
+        pred_start_date = pred_end_date - timedelta(days=6)
+        cutoff_date = pred_start_date - timedelta(days=1)
+        
+        # Check available training history up to cutoff_date
+        train_dates = [d for d in sorted_dates if d <= cutoff_date]
+        if len(train_dates) < 14:
+            # Need at least 14 days to compute basic trend decomposition
+            break
+            
+        # EXPLICIT LEAKAGE INVARIANT ASSERTION
+        assert max(train_dates) < pred_start_date, (
+            f"Future leakage invariant violated in fold {k}: "
+            f"max train date {max(train_dates)} >= prediction start {pred_start_date}"
+        )
+        
+        # Call exact live multi-step pipeline with save_to_db=False
+        fold_res = await generate_multi_step_forecast(
+            metric_id=metric_id,
+            session=session,
+            horizon_days=7,
+            model_backend=model_backend,
+            save_to_db=False,
+            cutoff_date=cutoff_date,
+        )
+        
+        # Derive used_ml_model directly from fold response (single source of truth)
+        used_ml_model = not fold_res["low_confidence"]
+        
+        for day_offset in range(7):
+            target_d = pred_start_date + timedelta(days=day_offset)
+            if target_d not in rollup_date_map or target_d not in fold_res["total_forecasts"]:
+                continue
+                
+            actual_val = rollup_date_map[target_d]
+            pred_p50 = fold_res["total_forecasts"][target_d]["p50"]
+            pred_p10 = fold_res["total_forecasts"][target_d]["p10"]
+            pred_p90 = fold_res["total_forecasts"][target_d]["p90"]
+            
+            abs_err = abs(pred_p50 - actual_val)
+            
+            # Scale-relative zero guard on actual value for abs_pct_error
+            if actual_val >= 0.01 * abs(mean_historical_val) and actual_val > 1e-4:
+                abs_pct_err = abs_err / actual_val
+            else:
+                abs_pct_err = None
+                
+            in_b = (pred_p10 <= actual_val <= pred_p90)
+            
+            accuracy_records.append({
+                "metric_id": metric_id,
+                "date": target_d,
+                "horizon_days": horizon_days,
+                "model_backend": model_backend,
+                "predicted_p10": pred_p10,
+                "predicted_p50": pred_p50,
+                "predicted_p90": pred_p90,
+                "actual": actual_val,
+                "abs_error": abs_err,
+                "abs_pct_error": abs_pct_err,
+                "in_bounds": in_b,
+                "used_ml_model": used_ml_model,
+            })
+            
+    # 3. Upsert records to forecast_accuracy_log table
+    if accuracy_records:
+        for rec in accuracy_records:
+            stmt_upsert = insert(ForecastAccuracyLog).values(**rec)
+            stmt_upsert = stmt_upsert.on_conflict_do_update(
+                constraint="uq_forecast_accuracy_log_metric_date_horizon_backend",
+                set_={
+                    "predicted_p10": stmt_upsert.excluded.predicted_p10,
+                    "predicted_p50": stmt_upsert.excluded.predicted_p50,
+                    "predicted_p90": stmt_upsert.excluded.predicted_p90,
+                    "actual": stmt_upsert.excluded.actual,
+                    "abs_error": stmt_upsert.excluded.abs_error,
+                    "abs_pct_error": stmt_upsert.excluded.abs_pct_error,
+                    "in_bounds": stmt_upsert.excluded.in_bounds,
+                    "used_ml_model": stmt_upsert.excluded.used_ml_model,
+                    "created_at": func.now(),
+                },
+            )
+            await session.execute(stmt_upsert)
+        await session.commit()
+        
+    return {
+        "metric_id": metric_id,
+        "horizon_days": horizon_days,
+        "model_backend": model_backend,
+        "total_evaluations": len(accuracy_records),
+    }
+
+async def get_forecast_accuracy(
+    metric_id: int,
+    session: AsyncSession,
+    horizon_days: int = 7,
+    model_backend: str = "lightgbm",
+    auto_run: bool = True,
+) -> Dict[str, Any]:
+    """
+    Computes aggregate accuracy metrics (MAPE, MAE, coverage_pct) over the recent 12-week window.
+    Runs walk-forward backtest once if no logs exist yet.
+    """
+    stmt = (
+        select(ForecastAccuracyLog)
+        .where(
+            ForecastAccuracyLog.metric_id == metric_id,
+            ForecastAccuracyLog.horizon_days == horizon_days,
+            ForecastAccuracyLog.model_backend == model_backend,
+        )
+        .order_by(ForecastAccuracyLog.date.asc())
+    )
+    res = await session.execute(stmt)
+    logs = list(res.scalars().all())
+    
+    if len(logs) == 0 and auto_run:
+        await run_walk_forward_backtest(
+            metric_id=metric_id,
+            session=session,
+            horizon_days=horizon_days,
+            model_backend=model_backend,
+        )
+        res = await session.execute(stmt)
+        logs = list(res.scalars().all())
+        
+    if len(logs) == 0:
+        return {
+            "metric_id": metric_id,
+            "horizon_days": horizon_days,
+            "model_backend": model_backend,
+            "mape": None,
+            "mae": None,
+            "coverage_pct": None,
+            "total_evaluations": 0,
+            "ml_evaluations": 0,
+            "points": [],
+        }
+        
+    # Scope aggregation to recent 12-week window (date >= max_date - 84 days)
+    max_log_date = max(l.date for l in logs)
+    cutoff_log_date = max_log_date - timedelta(days=84)
+    recent_logs = [l for l in logs if l.date >= cutoff_log_date]
+    
+    ml_logs = [l for l in recent_logs if l.used_ml_model]
+    valid_pct_logs = [l for l in recent_logs if l.abs_pct_error is not None]
+    
+    mape = float(np.mean([l.abs_pct_error for l in valid_pct_logs])) if len(valid_pct_logs) > 0 else None
+    mae = float(np.mean([l.abs_error for l in recent_logs])) if len(recent_logs) > 0 else None
+    
+    ml_bounds = [l.in_bounds for l in ml_logs if l.in_bounds is not None]
+    coverage_pct = float(np.mean([1.0 if b else 0.0 for b in ml_bounds])) if len(ml_bounds) > 0 else None
+    
+    points_schema = [
+        AccuracyPointSchema(
+            date=l.date,
+            predicted_p50=l.predicted_p50,
+            actual=l.actual,
+            abs_error=l.abs_error,
+            abs_pct_error=l.abs_pct_error,
+            in_bounds=l.in_bounds,
+            predicted_p10=l.predicted_p10,
+            predicted_p90=l.predicted_p90,
+            used_ml_model=l.used_ml_model,
+        )
+        for l in recent_logs
+    ]
+    
+    return {
+        "metric_id": metric_id,
+        "horizon_days": horizon_days,
+        "model_backend": model_backend,
+        "mape": mape,
+        "mae": mae,
+        "coverage_pct": coverage_pct,
+        "total_evaluations": len(recent_logs),
+        "ml_evaluations": len(ml_logs),
+        "points": points_schema,
     }
