@@ -31,9 +31,11 @@ target_metadata = Base.metadata
 config = context.config
 
 # Dynamically set sqlalchemy.url from environment variable DATABASE_URL
-db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://driftline:driftline@localhost:5432/driftline_db")
+db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://driftline:driftline@127.0.0.1:5433/driftline_db")
 if db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+if "@localhost:" in db_url:
+    db_url = db_url.replace("@localhost:", "@127.0.0.1:", 1)
 config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name is not None:

@@ -666,3 +666,93 @@ async def test_feedback_loop_weight_decay():
         await test_engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_get_metric_timeseries_segment_filter():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Segment Filter Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            rows.append({"date": d.isoformat(), "revenue": 100.0 + i, "channel": "organic"})
+            rows.append({"date": d.isoformat(), "revenue": 50.0 + i * 2, "channel": "paid"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # 1. Fetch total timeseries (no segment param)
+        tot_res = await client.get(f"/metrics/{metric_id}/timeseries")
+        assert tot_res.status_code == 200
+        tot_data = tot_res.json()
+        assert len(tot_data["points"]) == 60
+        assert tot_data["points"][0]["dimension_values"] == {}
+
+        # 2. Fetch organic segment timeseries
+        seg_res = await client.get(f"/metrics/{metric_id}/timeseries?segment=channel:organic")
+        assert seg_res.status_code == 200
+        seg_data = seg_res.json()
+        assert len(seg_data["points"]) == 60
+        assert seg_data["points"][0]["dimension_values"] == {"channel": "organic"}
+        assert seg_data["points"][0]["value_total"] == 100.0
+        assert seg_data["mad"] is not None
+
+        # 3. Fetch paid segment timeseries
+        paid_res = await client.get(f"/metrics/{metric_id}/timeseries?segment=channel:paid")
+        assert paid_res.status_code == 200
+        paid_data = paid_res.json()
+        assert paid_data["points"][0]["value_total"] == 50.0
+
+@pytest.mark.asyncio
+async def test_get_metric_timeseries_invalid_segment_format():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={"name": "Bad Segment Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_id = metric_res.json()["id"]
+
+        invalid_params = ["invalid", "channel:", ":organic", "  :  "]
+        for p in invalid_params:
+            res = await client.get(f"/metrics/{metric_id}/timeseries?segment={p}")
+            assert res.status_code == 400
+            assert "Invalid segment query parameter" in res.json()["detail"]
+
+@pytest.mark.asyncio
+async def test_anomaly_feedback_status_false_positive():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={"name": "FB Anomaly Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            val = 200.0 if i == 35 else 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": rows, "replace": True})
+
+        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anoms = anom_res.json()
+        assert len(anoms) >= 1
+        target_id = anoms[0]["id"]
+
+        # Post false_positive
+        fb_res = await client.post(f"/anomalies/{target_id}/feedback", json={"status": "false_positive"})
+        assert fb_res.status_code == 200
+        assert fb_res.json()["status"] == "false_positive"
+
+        # Post reviewed
+        rev_res = await client.post(f"/anomalies/{target_id}/feedback", json={"status": "reviewed"})
+        assert rev_res.status_code == 200
+        assert rev_res.json()["status"] == "reviewed"
+
+

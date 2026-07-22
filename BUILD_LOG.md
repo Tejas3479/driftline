@@ -65,3 +65,11 @@
 - Implemented Part B CatBoost Structural Importance in `train_and_persist_structural_importance`: trained `CatBoostRegressor` on raw observations using `day_of_week`, `trend_index`, and `cat_features` for dimension columns. Skipped training if history < 30 days, wrapped training in exception handling to preserve existing values on failure, and stored results on `Metric.structural_importance`.
 - Wrote 6 backend unit tests in `tests/test_drivers.py` covering mathematical invariants on non-flat seasonality, young segment exclusion, anomaly injection, direction word & unsigned percentage flipping, CatBoost training guards, and multi-segment anomaly explanation phrasing.
 - Next session context: Root-cause driver analysis (waterfall bridge and structural importance) is fully operational. 24/24 backend tests passing. Ready for Session 9 (Anomaly detail frontend page).
+
+## Session 9: Anomaly Detail Page & Root-Cause Driver Visualization
+- Extended `GET /metrics/{id}/timeseries` with optional `?segment=dimension:value` query parameter, validating format (returning 400 Bad Request on malformed inputs) and querying marginal rollups while reusing the shared `compute_scaled_mad` function.
+- Added `primary_dimension` to `AnomalyDriversResponseSchema` and `get_anomaly_drivers` service, providing the explicit argmax dimension to the frontend for default tab scoping.
+- Built Next.js Anomaly Detail Page (`/anomalies/[id]`) with prominent `explanation_text`, a Plotly horizontal bar chart of ranked segment contributions (dimension-scoped, sorted, direction-aware coloring based on `direction_good`), secondary structural importance callout context, interactive segment-filtered time series re-rendering, and a feedback control loop (`POST /anomalies/{id}/feedback`) passing exact backend status values (`"false_positive"`, `"reviewed"`).
+- Wrote unit & component tests in `tests/test_anomalies.py`, `tests/test_drivers.py`, and `frontend/__tests__/anomalies.test.tsx`.
+- Next session context: Anomaly detail page and root-cause driver visualization are fully operational. 27/27 backend tests passing, 7/7 frontend tests passing. Ready for Session 10 (Short-horizon quantile forecasting & LightGBM/XGBoost models).
+

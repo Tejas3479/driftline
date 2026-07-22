@@ -13,6 +13,24 @@ vi.mock("../app/api", () => {
   };
 });
 
+// Mock next/dynamic to render components synchronously in tests
+vi.mock("next/dynamic", () => {
+  return {
+    default: (componentPromise: any) => {
+      return function DynamicMock(props: any) {
+        return (
+          <div data-testid="mock-plotly-chart">
+            Plotly Chart Rendered
+            <div data-testid="mock-plotly-shapes-count">
+              {props.anomalies?.length || 0}
+            </div>
+          </div>
+        );
+      };
+    },
+  };
+});
+
 // Mock react-plotly.js to prevent jsdom canvas rendering crashes
 // and print the passed shapes list for inspection.
 vi.mock("react-plotly.js", () => {
@@ -110,8 +128,9 @@ describe("Metric Detail Page Rendering & Shading/Markers Checks", () => {
 
     // Verify all 2 anomalies are rendered as vertical dashed lines (shapes) in default 'ALL' view
     expect(screen.getByTestId("mock-plotly-shapes-count")).toHaveTextContent("2");
-    expect(screen.getByText("Anomaly Count")).toBeInTheDocument();
-    expect(screen.getByText("2 (2 new)")).toBeInTheDocument();
+    const countHeader = screen.getByText("Anomaly Count");
+    expect(countHeader).toBeInTheDocument();
+    expect(countHeader.parentElement).toHaveTextContent("2 (2 new)");
 
     // Check table shows the anomalies
     expect(screen.getByText("2026-07-05")).toBeInTheDocument();

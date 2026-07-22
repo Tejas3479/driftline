@@ -142,6 +142,7 @@ async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int) -> Dict[s
         "anomaly_id": anomaly.id,
         "metric_id": metric.id,
         "explanation_text": explanation_text,
+        "primary_dimension": selected_dimension,
         "ranked_segments": valid_segments_all,
         "structural_importance": structural_importance
     }

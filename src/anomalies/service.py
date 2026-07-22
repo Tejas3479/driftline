@@ -524,16 +524,22 @@ async def get_metric_timeseries(
     db: AsyncSession,
     metric_id: int,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    segment: Optional[str] = None
 ) -> Tuple[List[TimeseriesPointSchema], Optional[float]]:
     """
-    Returns the total rollup points for the requested metric and date range,
-    along with the historical scaled MAD calculated over the entire metric history.
+    Returns the rollup points for the requested metric, date range, and segment filter,
+    along with the historical scaled MAD calculated over the target series history.
     """
-    # 1. Fetch entire history of total rollups to compute stable historical MAD
+    target_dim_values = {}
+    if segment:
+        dim_key, dim_val = segment.split(":", 1)
+        target_dim_values = {dim_key.strip(): dim_val.strip()}
+
+    # 1. Fetch entire history of rollups for this target series to compute stable historical MAD
     hist_query = select(DailyRollup).where(
         DailyRollup.metric_id == metric_id,
-        DailyRollup.dimension_values == {},
+        DailyRollup.dimension_values == target_dim_values,
         DailyRollup.trend.is_not(None)
     ).order_by(DailyRollup.date)
     
@@ -549,7 +555,7 @@ async def get_metric_timeseries(
     # 2. Fetch the filtered rollups for the requested range
     query = select(DailyRollup).where(
         DailyRollup.metric_id == metric_id,
-        DailyRollup.dimension_values == {}
+        DailyRollup.dimension_values == target_dim_values
     ).order_by(DailyRollup.date)
 
     if start_date:

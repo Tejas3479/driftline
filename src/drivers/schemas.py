@@ -23,5 +23,6 @@ class AnomalyDriversResponseSchema(BaseModel):
     anomaly_id: int
     metric_id: int
     explanation_text: str
+    primary_dimension: Optional[str] = None
     ranked_segments: List[SegmentContributionSchema]
     structural_importance: List[StructuralImportanceSchema]

@@ -193,6 +193,7 @@ async def test_driver_anomaly_injection():
         ranked = data["ranked_segments"]
         assert len(ranked) >= 1
         top = ranked[0]
+        assert data["primary_dimension"] == "channel"
         assert top["dimension"] == "channel"
         assert top["segment_value"] == "organic"
         assert abs(top["contribution_pct"] - 1.0) < 0.05

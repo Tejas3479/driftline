@@ -1,11 +1,12 @@
 export interface Metric {
   id: number;
   workspace_id: number;
-  name: str;
+  name: string;
   unit: string | null;
   direction_good: 'up_is_good' | 'down_is_good';
   sensitivity: 'low' | 'medium' | 'high';
   grain: 'daily' | 'weekly';
+  z_score_weight?: number;
   created_at: string;
 }
 
@@ -32,9 +33,32 @@ export interface Anomaly {
   type: 'spike' | 'dip' | 'level_shift' | 'volatility';
   z_score: number;
   isolation_score: number;
-  status: 'new' | 'reviewed' | 'snoozed' | 'dismissed';
+  status: 'new' | 'reviewed' | 'resolved' | 'false_positive';
   explanation_text: string | null;
   created_at: string;
+}
+
+export interface SegmentContribution {
+  dimension: string;
+  segment_value: string;
+  actual_value: number;
+  expected_value: number;
+  delta: number;
+  contribution_pct: number;
+}
+
+export interface StructuralImportance {
+  feature: string;
+  importance: number;
+}
+
+export interface AnomalyDriversResponse {
+  anomaly_id: number;
+  metric_id: number;
+  explanation_text: string;
+  primary_dimension: string | null;
+  ranked_segments: SegmentContribution[];
+  structural_importance: StructuralImportance[];
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -47,8 +71,11 @@ export async function fetchMetrics(): Promise<Metric[]> {
   return res.json();
 }
 
-export async function fetchTimeseries(metricId: number): Promise<TimeseriesResponse> {
-  const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/timeseries`, { cache: 'no-store' });
+export async function fetchTimeseries(metricId: number, segment?: string): Promise<TimeseriesResponse> {
+  const url = segment
+    ? `${API_BASE_URL}/metrics/${metricId}/timeseries?segment=${encodeURIComponent(segment)}`
+    : `${API_BASE_URL}/metrics/${metricId}/timeseries`;
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to fetch timeseries for metric ${metricId}: ${res.statusText}`);
   }
@@ -67,6 +94,29 @@ export async function fetchAnomalyDetail(anomalyId: number): Promise<Anomaly> {
   const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}`, { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(`Failed to fetch anomaly detail for anomaly ${anomalyId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchAnomalyDrivers(anomalyId: number): Promise<AnomalyDriversResponse> {
+  const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}/drivers`, { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch drivers for anomaly ${anomalyId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function submitAnomalyFeedback(
+  anomalyId: number,
+  status: 'new' | 'reviewed' | 'resolved' | 'false_positive'
+): Promise<Anomaly> {
+  const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to submit feedback for anomaly ${anomalyId}: ${res.statusText}`);
   }
   return res.json();
 }

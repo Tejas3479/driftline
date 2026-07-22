@@ -14,9 +14,23 @@ async def get_metric_timeseries_endpoint(
     id: int,
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
+    segment: Optional[str] = Query(None, description="Segment filter formatted as dimension:value"),
     db: AsyncSession = Depends(get_db)
 ):
-    points, mad = await service.get_metric_timeseries(db, id, start, end)
+    if segment is not None:
+        if ":" not in segment:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid segment query parameter format. Expected 'dimension:value'"
+            )
+        dim_key, dim_val = segment.split(":", 1)
+        if not dim_key.strip() or not dim_val.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid segment query parameter. Dimension and value cannot be empty"
+            )
+
+    points, mad = await service.get_metric_timeseries(db, id, start, end, segment)
     return {
         "metric_id": id,
         "mad": mad,
