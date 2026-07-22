@@ -30,6 +30,7 @@ class Metric(Base):
     sensitivity: Mapped[SensitivityEnum] = mapped_column(SQLEnum(SensitivityEnum, name="sensitivity_enum", create_type=False), nullable=False)
     grain: Mapped[GrainEnum] = mapped_column(SQLEnum(GrainEnum, name="grain_enum", create_type=False), nullable=False)
     z_score_weight: Mapped[float] = mapped_column(Float, default=0.5, server_default="0.5", nullable=False)
+    structural_importance: Mapped[list] = mapped_column(JSONB, default=list, server_default='[]', nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class DimensionDef(Base):

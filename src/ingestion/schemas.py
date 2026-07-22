@@ -22,6 +22,7 @@ class MetricResponseSchema(BaseModel):
     sensitivity: SensitivityEnum
     grain: GrainEnum
     z_score_weight: float
+    structural_importance: List[dict]
     created_at: datetime
 
 class ColumnMappingSchema(BaseModel):

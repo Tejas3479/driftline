@@ -34,7 +34,7 @@ def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
     
     # Day of week (0 = Monday, 6 = Sunday)
     df['day_of_week'] = df.index.dayofweek
-    
+
     # Seasonal constants (7 day-of-week medians for outlier robustness)
     seasonal_map = df.groupby('day_of_week')['detrended'].median().to_dict()
     df['seasonal'] = df['day_of_week'].map(seasonal_map)
@@ -92,17 +92,17 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
 
     # Marginal groups per dimension
     for dim_name in dimension_names:
-        # Get unique values of this dimension in current observations
-        dim_values = {
-            obs.dimension_values.get(dim_name)
-            for obs in observations
-            if obs.dimension_values and obs.dimension_values.get(dim_name) is not None
-        }
+        dim_values = set()
+        for obs in observations:
+            val = obs.dimension_values.get(dim_name) if obs.dimension_values else None
+            dim_values.add(val if val is not None else "__unassigned__")
+            
         for dim_val in dim_values:
-            filtered_obs = [
-                obs for obs in observations
-                if obs.dimension_values and obs.dimension_values.get(dim_name) == dim_val
-            ]
+            filtered_obs = []
+            for obs in observations:
+                val = obs.dimension_values.get(dim_name) if obs.dimension_values else None
+                if (dim_val == "__unassigned__" and val is None) or (val == dim_val):
+                    filtered_obs.append(obs)
             timeseries_groups.append(({dim_name: dim_val}, filtered_obs))
 
     upsert_values = []

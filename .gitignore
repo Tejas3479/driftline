@@ -34,3 +34,4 @@ Thumbs.db
 .vscode/
 .idea/
 postgres_data/
+catboost_info/

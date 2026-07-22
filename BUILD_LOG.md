@@ -54,3 +54,14 @@
   - Decays the dominant weight by `0.05` (clamped to `[0.1, 0.9]`).
   - Instantly recomputes the severity score of all non-frozen anomalies ($\ge$ max_date - 14 days) in the database.
 - Next session context: Multivariate anomaly detection and the alert feedback loop are fully functional. All 18 backend tests passing. Ready for Session 8 (Anomaly details and historical visualization).
+
+## Session 8: Root-Cause Driver Analysis (Waterfall Bridge & CatBoost Structural Importance)
+- Added driver analysis domain `src/drivers/` with `router.py`, `schemas.py`, `service.py`, and endpoint `GET /anomalies/{id}/drivers`.
+- Grouped raw observations with missing/null dimension values under a fallback segment `"__unassigned__"`, ensuring complete partition of the total metric volume without data leaks.
+- Calculated Part A Waterfall Bridge: `segment_delta_s = actual_value(s) - (trend(s) + seasonal(s))`. Validated that the sum invariant $\sum_s \text{segment\_delta\_s} == \text{total\_delta}$ holds exactly by construction on aligned continuous calendar rollups without requiring post-hoc proportional adjustments.
+- Safely excluded young segments with incomplete decomposition history (`trend` or `seasonal` is `None` on date $t$) from ranked segment contributions.
+- Handled neutral topline reallocations ($|total\_delta| < 1e-4$) as a named condition, formatting the explanation as flat/stable and returning `0.0` for segment contribution percentages.
+- Implemented multi-dimension explanation selection rule: selecting the dimension whose top segment has the highest absolute contribution percentage (breaking ties alphabetically). Dynamically adjusted explanation phrasing (`"Other segments also experienced significant shifts."`) when multiple segments are anomalous.
+- Implemented Part B CatBoost Structural Importance in `train_and_persist_structural_importance`: trained `CatBoostRegressor` on raw observations using `day_of_week`, `trend_index`, and `cat_features` for dimension columns. Skipped training if history < 30 days, wrapped training in exception handling to preserve existing values on failure, and stored results on `Metric.structural_importance`.
+- Wrote 6 backend unit tests in `tests/test_drivers.py` covering mathematical invariants on non-flat seasonality, young segment exclusion, anomaly injection, direction word & unsigned percentage flipping, CatBoost training guards, and multi-segment anomaly explanation phrasing.
+- Next session context: Root-cause driver analysis (waterfall bridge and structural importance) is fully operational. 24/24 backend tests passing. Ready for Session 9 (Anomaly detail frontend page).
