@@ -118,5 +118,14 @@
 - Decisions: Configured per-metric exception isolation and pre-extracted metric metadata tuples `(m_id, w_id, m_name)` to prevent SQLAlchemy ORM object expiration errors; set `n_estimators=50` for fast, robust LightGBM execution.
 - Next session context: Automated daily/weekly scheduling and digest PDF generation are fully operational. All 41 backend pytest tests passing cleanly. Ready for Session 16 (Email digests and notification distribution).
 
+## Session 16: Email Digests, Alert Rules, In-App Notifications & Alert Triggering
+- Built `src/alerts/` domain (`models.py`, `schemas.py`, `service.py`, `router.py`, `email.py`) with `Notification` model (`anomaly_id` unique constraint) and Alembic migration `7e4f5a6b7c8d_create_notifications_table.py`.
+- Built API endpoints `POST /alert-rules`, `GET /alert-rules`, `GET /notifications`, and `PATCH /notifications/{id}/read` with strict Pydantic `ChannelEnum` validation (`in_app`, `email`).
+- Implemented left-anti-join alert evaluation query (`~Anomaly.id.in_(select(Notification.anomaly_id))` + `status.notin_(['false_positive', 'resolved'])`) catching severity-drift threshold crossings while suppressing dismissed anomalies and preventing duplicate notification errors.
+- Built SMTP email dispatch (`send_weekly_digest_email` and `send_immediate_alert_email`) wrapped in isolated local `try...except Exception:` blocks, ensuring network/SMTP failures log warnings without rolling back DB notifications or interrupting daily pipeline execution.
+- Decisions: Integrated alert triggering at the end of `run_daily_pipeline` and digest email sending at the end of `run_weekly_retrain_and_digest`. Unconfigured metrics default to `min_severity = 80.0` and `channels = ["in_app"]`.
+- Next session context: Email digest and alert distribution operational. All 47 backend pytest tests passing cleanly.
+
+
 
 

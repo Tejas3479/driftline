@@ -10,6 +10,7 @@ from src.anomalies.router import router as anomalies_router
 from src.drivers.router import router as drivers_router
 from src.forecasting.router import router as forecasting_router
 from src.digests.router import router as digests_router
+from src.alerts.router import router as alerts_router
 from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest
 
 scheduler = AsyncIOScheduler()
@@ -54,6 +55,9 @@ app.include_router(forecasting_router, prefix="/api/v1")
 
 app.include_router(digests_router)
 app.include_router(digests_router, prefix="/api/v1")
+
+app.include_router(alerts_router)
+app.include_router(alerts_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():

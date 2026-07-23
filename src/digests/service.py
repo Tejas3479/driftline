@@ -275,6 +275,14 @@ async def run_daily_pipeline(
                     logger.warning(f"Driver analysis skipped for anomaly #{anomaly.id}: {str(ex)}")
 
             await db.commit()
+
+            # 3. Evaluate anomalies against alert rules and trigger in-app notifications & immediate emails
+            try:
+                from src.alerts.service import evaluate_and_trigger_alerts_for_metric
+                await evaluate_and_trigger_alerts_for_metric(db, m_id)
+            except Exception as alert_ex:
+                logger.warning(f"Alert evaluation failed for metric #{m_id}: {str(alert_ex)}")
+
             results.append({"metric_id": m_id, "status": "success", "anomalies_count": len(anomalies)})
         except Exception as e:
             logger.error(f"Daily pipeline failed for metric #{m_id}: {str(e)}", exc_info=True)
@@ -290,7 +298,7 @@ async def run_weekly_retrain_and_digest(
     """
     Weekly scheduled job:
     For every metric (or filtered metric_ids): retrains CatBoost structural importance, retrains forecasting models,
-    runs walk-forward backtest, and generates the weekly digest PDF.
+    runs walk-forward backtest, generates the weekly digest PDF, and dispatches weekly email.
     Manages self-contained AsyncSessionLocal lifecycle if db is None.
     """
     if db is None:
@@ -322,11 +330,25 @@ async def run_weekly_retrain_and_digest(
             # Step 4: Generate weekly digest PDF (reads fresh accuracy log)
             digest = await generate_weekly_digest(db=db, workspace_id=w_id, metric_id=m_id)
             digests.append(digest)
+
+            # Step 5: Dispatch weekly digest email with PDF attached
+            try:
+                from src.alerts.email import send_weekly_digest_email
+                send_weekly_digest_email(
+                    workspace_id=w_id,
+                    metric_name=m_name,
+                    period_str=f"{digest.period_start.isoformat()} to {digest.period_end.isoformat()}",
+                    pdf_path=digest.pdf_path
+                )
+            except Exception as mail_ex:
+                logger.warning(f"Weekly digest email dispatch failed for metric #{m_id}: {str(mail_ex)}")
+
         except Exception as e:
             logger.error(f"Weekly retrain & digest failed for metric #{m_id}: {str(e)}", exc_info=True)
             await db.rollback()
 
     return digests
+
 
 
 
