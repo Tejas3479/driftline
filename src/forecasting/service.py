@@ -100,23 +100,23 @@ def train_quantile_models(
         
     if model_backend == "lightgbm":
         model_p10 = LGBMRegressor(
-            objective="quantile", alpha=0.10, n_estimators=200, random_state=42, verbose=-1, n_jobs=-1
+            objective="quantile", alpha=0.10, n_estimators=50, random_state=42, verbose=-1, n_jobs=1
         )
         model_p50 = LGBMRegressor(
-            objective="quantile", alpha=0.50, n_estimators=200, random_state=42, verbose=-1, n_jobs=-1
+            objective="quantile", alpha=0.50, n_estimators=50, random_state=42, verbose=-1, n_jobs=1
         )
         model_p90 = LGBMRegressor(
-            objective="quantile", alpha=0.90, n_estimators=200, random_state=42, verbose=-1, n_jobs=-1
+            objective="quantile", alpha=0.90, n_estimators=50, random_state=42, verbose=-1, n_jobs=1
         )
     elif model_backend == "xgboost":
         model_p10 = XGBRegressor(
-            objective="reg:quantileerror", quantile_alpha=0.10, tree_method="hist", n_estimators=200, random_state=42
+            objective="reg:quantileerror", quantile_alpha=0.10, tree_method="hist", n_estimators=50, random_state=42, n_jobs=1
         )
         model_p50 = XGBRegressor(
-            objective="reg:quantileerror", quantile_alpha=0.50, tree_method="hist", n_estimators=200, random_state=42
+            objective="reg:quantileerror", quantile_alpha=0.50, tree_method="hist", n_estimators=50, random_state=42, n_jobs=1
         )
         model_p90 = XGBRegressor(
-            objective="reg:quantileerror", quantile_alpha=0.90, tree_method="hist", n_estimators=200, random_state=42
+            objective="reg:quantileerror", quantile_alpha=0.90, tree_method="hist", n_estimators=50, random_state=42, n_jobs=1
         )
     else:
         raise ValueError(f"Unsupported model_backend: {model_backend}. Expected 'lightgbm' or 'xgboost'.")
@@ -675,7 +675,7 @@ async def get_forecast_accuracy(
     session: AsyncSession,
     horizon_days: int = 7,
     model_backend: str = "lightgbm",
-    auto_run: bool = True,
+    auto_run: bool = False,
 ) -> Dict[str, Any]:
     """
     Computes aggregate accuracy metrics (MAPE, MAE, coverage_pct) over the recent 12-week window.

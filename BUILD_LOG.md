@@ -110,4 +110,13 @@
 - Built Model Health & Settings Page (`/settings`) displaying verified backend fields: 12-week MAPE, interval coverage %, baseline forecast date, evaluated backtest folds, ML model version, model engine, and metric sensitivity setting.
 - Wrote backend unit test `test_get_global_anomalies` in `tests/test_anomalies.py` and frontend test suite `frontend/__tests__/anomalies_log.test.tsx`. All 39 backend pytest tests passing, all 14 frontend vitest tests passing.
 
+## Session 15: Automated AsyncIOScheduler Pipelines & Headless Matplotlib Digest PDF
+- Built `src/digests/` domain (`router.py`, `schemas.py`, `service.py`, `models.py`) with `metric_id` FK column, unique index constraint `uq_digests_workspace_metric_period`, and Alembic migration `6d3e4f5a6b7c_add_metric_id_and_unique_to_digests.py`.
+- Integrated `AsyncIOScheduler` bound directly to FastAPI's modern lifespan context manager in `main.py`, running daily pipeline (`CronTrigger(hour=2)`) and weekly retrain & digest (`CronTrigger(day_of_week="mon", hour=3)`).
+- Implemented headless Matplotlib PDF generator (`matplotlib.use('Agg')`) rendering period total vs prior period (with zero guard), highest-severity anomaly driver text, 12-week backtest MAPE %, 30-day actuals + projected median forecast line $p_{50}$ with $p_{10}\dots p_{90}$ confidence band, and idempotent database upsert `insert(Digest).on_conflict_do_update`.
+- Implemented `GET /digests/{id}` PDF download API endpoint and `GET /digests` list API endpoint with HTTP 404 guards.
+- Decisions: Configured per-metric exception isolation and pre-extracted metric metadata tuples `(m_id, w_id, m_name)` to prevent SQLAlchemy ORM object expiration errors; set `n_estimators=50` for fast, robust LightGBM execution.
+- Next session context: Automated daily/weekly scheduling and digest PDF generation are fully operational. All 41 backend pytest tests passing cleanly. Ready for Session 16 (Email digests and notification distribution).
+
+
 

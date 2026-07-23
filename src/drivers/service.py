@@ -265,6 +265,13 @@ async def train_and_persist_structural_importance(db: AsyncSession, metric_id: i
     feature_cols = ["day_of_week", "trend_index"] + dim_col_list
     cat_cols = dim_col_list
 
+    if df["value"].nunique() <= 1:
+        logger.info(f"Skipping CatBoost structural importance for metric {metric_id}: target values are constant.")
+        metric_stmt = select(Metric).where(Metric.id == metric_id)
+        m_res = await db.execute(metric_stmt)
+        metric = m_res.scalars().first()
+        return metric.structural_importance if metric else []
+
     try:
         train_pool = Pool(
             data=df[feature_cols],
