@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp } from "lucide-react";
+import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp, LayoutGrid } from "lucide-react";
 import { fetchMetrics, fetchTimeseries, fetchAnomalies, Metric, TimeseriesPoint, Anomaly } from "../../api";
 
 
@@ -21,6 +21,7 @@ const MetricChart = dynamic(() => import("@/components/MetricChart"), {
 });
 
 type RangeFilter = "7d" | "30d" | "90d" | "1y" | "all";
+
 
 export default function MetricDetail({ params }: { params: { id: string } }) {
   const metricId = parseInt(params.id);
@@ -170,14 +171,22 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
             </p>
           </div>
 
-          {/* Range Selector Controls & Forecast Link */}
-          <div className="flex flex-wrap items-center gap-4">
+          {/* Range Selector Controls & Links */}
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href={`/metrics/${metric.id}/segments`}
+              className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-cyan-500 transition"
+            >
+              <LayoutGrid className="h-4 w-4" /> Compare Segments →
+            </Link>
+
             <Link
               href={`/metrics/${metric.id}/forecast`}
               className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-purple-500 transition"
             >
               <TrendingUp className="h-4 w-4" /> Forecast & Track Record →
             </Link>
+
 
             <div className="flex items-center bg-slate-900 p-1.5 rounded-xl border border-slate-800 shadow-lg">
               {(["7d", "30d", "90d", "1y", "all"] as RangeFilter[]).map((r) => (

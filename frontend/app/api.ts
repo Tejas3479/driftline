@@ -193,3 +193,31 @@ export async function fetchAccuracy(
   return res.json();
 }
 
+export async function fetchSegmentComparison(
+  metricId: number,
+  dimension?: string,
+  range: string = 'all',
+  startDate?: string,
+  endDate?: string,
+  signal?: AbortSignal
+): Promise<any> {
+  const params = new URLSearchParams();
+  if (dimension) params.set('dimension', dimension);
+  if (range) params.set('range', range);
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+
+  const url = `${API_BASE_URL}/metrics/${metricId}/segment-comparison?${params.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', signal });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errJson = await res.json();
+      if (errJson.detail) detail = errJson.detail;
+    } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+

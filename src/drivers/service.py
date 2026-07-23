@@ -1,18 +1,20 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 import pandas as pd
+import altair as alt
 from catboost import CatBoostRegressor, Pool
 from fastapi import HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ingestion.models import Metric, Observation, DirectionGoodEnum
+from src.ingestion.models import Metric, Observation, DimensionDef, DirectionGoodEnum
 from src.anomalies.models import Anomaly, DailyRollup
 from src.drivers.schemas import SegmentContributionSchema, StructuralImportanceSchema, AnomalyDriversResponseSchema
 
 logger = logging.getLogger(__name__)
+
 
 async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int) -> Dict[str, Any]:
     # 1. Fetch anomaly
@@ -302,3 +304,114 @@ async def train_and_persist_structural_importance(db: AsyncSession, metric_id: i
         m_res = await db.execute(metric_stmt)
         metric = m_res.scalars().first()
         return metric.structural_importance if metric else []
+
+async def generate_segment_comparison_spec(
+    db: AsyncSession,
+    metric_id: int,
+    dimension: Optional[str] = None,
+    range_token: Optional[str] = "all",
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> Dict[str, Any]:
+    """
+    Generates a Vega-Lite JSON specification dictionary comparing all segments of a dimension
+    side by side on a shared y-scale using Altair faceting.
+    """
+    # 1. Fetch metric
+    metric_stmt = select(Metric).where(Metric.id == metric_id)
+    metric_res = await db.execute(metric_stmt)
+    metric = metric_res.scalars().first()
+    if not metric:
+        raise ValueError(f"Metric #{metric_id} not found")
+
+    # 2. Fetch dimension definitions ordered deterministically by id asc
+    dim_stmt = select(DimensionDef).where(DimensionDef.metric_id == metric_id).order_by(DimensionDef.id.asc())
+    dim_res = await db.execute(dim_stmt)
+    dimensions = list(dim_res.scalars().all())
+
+    if not dimensions:
+        raise ValueError(f"Metric #{metric_id} has no configured dimensions")
+
+    available_dim_names = [d.name for d in dimensions]
+
+    if dimension is not None:
+        if dimension not in available_dim_names:
+            raise ValueError(f"Unknown dimension '{dimension}' for metric #{metric_id}")
+        target_dim = dimension
+    else:
+        target_dim = available_dim_names[0]
+
+    # 3. Determine max_date in DailyRollup for server-side range token anchoring
+    max_date_stmt = select(func.max(DailyRollup.date)).where(DailyRollup.metric_id == metric_id)
+    max_date = await db.scalar(max_date_stmt)
+
+    cutoff_date: Optional[date] = start_date
+    if cutoff_date is None and range_token and range_token != "all" and max_date is not None:
+        if range_token == "7d":
+            cutoff_date = max_date - timedelta(days=7)
+        elif range_token == "30d":
+            cutoff_date = max_date - timedelta(days=30)
+        elif range_token == "90d":
+            cutoff_date = max_date - timedelta(days=90)
+        elif range_token == "1y":
+            cutoff_date = max_date - timedelta(days=365)
+
+    # 4. Query DailyRollups for target_dim using JSONB has_key (jsonb_exists)
+    query_stmt = select(DailyRollup).where(
+        DailyRollup.metric_id == metric_id,
+        func.jsonb_exists(DailyRollup.dimension_values, target_dim)
+    )
+
+    if cutoff_date:
+        query_stmt = query_stmt.where(DailyRollup.date >= cutoff_date)
+    if end_date:
+        query_stmt = query_stmt.where(DailyRollup.date <= end_date)
+
+    query_stmt = query_stmt.order_by(DailyRollup.date.asc())
+
+    res = await db.execute(query_stmt)
+    rollups = list(res.scalars().all())
+
+    records = []
+    for r in rollups:
+        seg_val = r.dimension_values.get(target_dim, "__unassigned__")
+        records.append({
+            "date": r.date.isoformat(),
+            "value": float(r.value_total),
+            "segment_value": str(seg_val)
+        })
+
+    if not records:
+        df = pd.DataFrame(columns=["date", "value", "segment_value"])
+        chart = alt.Chart(df).mark_line().encode(
+            x='date:T',
+            y='value:Q',
+        ).facet(column='segment_value:N').properties(
+            title=f"Segment Comparison for {metric.name} ({target_dim})"
+        )
+        return chart.to_dict()
+
+    df = pd.DataFrame(records)
+
+    # 5. Compute relative y-domain padding across all segment values
+    y_min = float(df["value"].min())
+    y_max = float(df["value"].max())
+    y_diff = y_max - y_min
+    padding = y_diff * 0.05 if y_diff > 0 else (abs(y_max) * 0.05 or 1.0)
+    y_domain = [y_min - padding, y_max + padding]
+
+    # 6. Build Altair chart with shared scale and faceting
+    chart = alt.Chart(df).mark_line(point=True).encode(
+        x=alt.X('date:T', title='Date'),
+        y=alt.Y('value:Q', scale=alt.Scale(domain=y_domain), title='Value'),
+        color=alt.Color('segment_value:N', legend=None),
+        tooltip=['date:T', 'segment_value:N', 'value:Q']
+    ).facet(
+        facet=alt.Facet('segment_value:N', title=f'Segment ({target_dim})'),
+        columns=3
+    ).properties(
+        title=f"Segment Comparison for {metric.name} ({target_dim})"
+    )
+
+    return chart.to_dict()
+

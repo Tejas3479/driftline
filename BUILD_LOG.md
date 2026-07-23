@@ -93,3 +93,13 @@
 - Built separate `ForecastVsActualChart` track record visualization plotting historical `predicted_p50` vs `actual` from `/metrics/{id}/accuracy`, visually distinguishing seasonal-naive fallback folds (`used_ml_model = false`) with gray diamond markers.
 - Added `ForecastStatsPanel` displaying 12-week MAPE, interval coverage percentage with target bounds, evaluated fold counts, model engine version, and null-safe fallback text for cold-start metrics.
 - Added unit tests in `frontend/__tests__/forecast.test.tsx`. All 37 backend pytest tests passing, all 9 frontend vitest tests passing.
+
+## Session 13: Segment Comparison Small-Multiples (Altair & Vega-Embed)
+- Built backend endpoint `GET /metrics/{id}/segment-comparison` using Altair faceting to produce a raw Vega-Lite JSON specification dictionary.
+- Enforced single source of truth (`DailyRollup`) for marginal segment rollups, querying PostgreSQL JSONB key presence (`func.jsonb_exists(DailyRollup.dimension_values, dimension)`) and extracting values safely without dialect ambiguity.
+- Validated `dimension` against `DimensionDef` records (ordered deterministically by `id.asc()`), returning `HTTP 400 Bad Request` for unknown dimensions or zero-dimension metrics.
+- Added server-side date range filtering (`range=7d|30d|90d|1y|all`) anchored to `max_date` in `DailyRollup` for that metric, ensuring demo/historical datasets never return empty plots when filtering.
+- Implemented relative 5% y-axis scale domain padding (`padding = (y_max - y_min) * 0.05 if (y_max - y_min) > 0 else (abs(y_max) * 0.05 or 1.0)`) shared identically across all facets.
+- Built frontend React wrapper `<SegmentComparisonChart spec={spec} />` using `vega-embed` with cleanup (`resView.finalize()`) on unmount/re-render, and Next.js page at `/metrics/[id]/segments` with dimension tabs, range selector controls, and shared-scale informative callout banner.
+- Wrote 4 backend pytest unit tests in `tests/test_drivers.py` and 2 frontend vitest tests in `frontend/__tests__/segments.test.tsx`. All 41 backend pytest tests passing, all 11 frontend vitest tests passing.
+

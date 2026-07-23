@@ -312,3 +312,85 @@ async def test_multi_segment_anomalies_explanation():
         text = drivers_res.json()["explanation_text"]
 
         assert "Other channel segments also experienced significant shifts." in text
+
+@pytest.mark.asyncio
+async def test_segment_comparison_spec_and_filtering():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # 1. Create metric with 2 dimensions (channel, plan)
+        metric_res = await client.post("/metrics", json={"name": "Segment Comparison Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            rows.append({"date": d.isoformat(), "revenue": 100.0 + i, "channel": "organic", "plan": "starter"})
+            rows.append({"date": d.isoformat(), "revenue": 50.0 + i, "channel": "paid", "plan": "enterprise"})
+            rows.append({"date": d.isoformat(), "revenue": 25.0 + i, "channel": "referral", "plan": "starter"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel", "plan"],
+            "rows": rows,
+            "replace": True
+        })
+
+        # 2. Test default dimension & range=all
+        spec_res = await client.get(f"/metrics/{metric_id}/segment-comparison")
+        assert spec_res.status_code == 200
+        spec = spec_res.json()
+        
+        assert "$schema" in spec
+        assert "facet" in spec
+        assert "data" in spec
+
+        # Extract values whether inline under data.values or top-level datasets
+        def extract_records(s):
+            if "values" in s.get("data", {}):
+                return s["data"]["values"]
+            if "datasets" in s:
+                name = s.get("data", {}).get("name")
+                if name and name in s["datasets"]:
+                    return s["datasets"][name]
+                return list(s["datasets"].values())[0]
+            return []
+
+        values = extract_records(spec)
+        assert len(values) > 0
+        seg_vals = set(v["segment_value"] for v in values)
+        assert seg_vals == {"organic", "paid", "referral"}
+
+        # Verify shared y-scale domain in encoding
+        y_scale = spec["spec"]["encoding"]["y"]["scale"]["domain"]
+        assert isinstance(y_scale, list) and len(y_scale) == 2
+        assert y_scale[0] <= 25.0 # y_min around 25.0 minus padding
+
+        # 3. Test range=7d server-side date filtering
+        spec_7d_res = await client.get(f"/metrics/{metric_id}/segment-comparison?dimension=channel&range=7d")
+        assert spec_7d_res.status_code == 200
+        spec_7d = spec_7d_res.json()
+        values_7d = extract_records(spec_7d)
+        assert len(values_7d) > 0
+        
+        max_date = date(2026, 3, 1) # day 59 is 2026-03-01
+        cutoff_7d = max_date - timedelta(days=7)
+        
+        for v in values_7d:
+            v_date = date.fromisoformat(v["date"])
+            assert v_date >= cutoff_7d
+
+        # 4. Test invalid dimension query (400)
+        invalid_dim_res = await client.get(f"/metrics/{metric_id}/segment-comparison?dimension=invalid_dim")
+        assert invalid_dim_res.status_code == 400
+        assert "Unknown dimension 'invalid_dim'" in invalid_dim_res.json()["detail"]
+
+        # 5. Test metric without dimensions (400)
+        nodim_res = await client.post("/metrics", json={"name": "No Dim Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        nodim_id = nodim_res.json()["id"]
+        
+        nodim_spec_res = await client.get(f"/metrics/{nodim_id}/segment-comparison")
+        assert nodim_spec_res.status_code == 400
+        assert "has no configured dimensions" in nodim_spec_res.json()["detail"]
+
+
