@@ -103,3 +103,11 @@
 - Built frontend React wrapper `<SegmentComparisonChart spec={spec} />` using `vega-embed` with cleanup (`resView.finalize()`) on unmount/re-render, and Next.js page at `/metrics/[id]/segments` with dimension tabs, range selector controls, and shared-scale informative callout banner.
 - Wrote 4 backend pytest unit tests in `tests/test_drivers.py` and 2 frontend vitest tests in `frontend/__tests__/segments.test.tsx`. All 41 backend pytest tests passing, all 11 frontend vitest tests passing.
 
+## Session 14: Unified Navigation, Global Anomaly Log Page, and Model Health Dashboard
+- Built unified navigation architecture across Driftline with persistent `Navbar.tsx` wrapped in `MetricProvider` React Context, persisting selected metric ID in `localStorage` with auto-sync on metric route visits and graceful disabled tooltip state when zero metrics exist.
+- Implemented global `GET /anomalies` endpoint in `src/anomalies/` joining `Anomaly` and `Metric` with `GlobalAnomalyResponseSchema`, status filtering, and sorting ordered by date descending.
+- Built Global Anomaly Log Page (`/anomalies`) with full status enum tabs (`All`, `New`, `Reviewed`, `Resolved`, `False Positive`), search filter input, date/severity sort controls, canonical severity score color badges, and anomaly direction badges.
+- Built Model Health & Settings Page (`/settings`) displaying verified backend fields: 12-week MAPE, interval coverage %, baseline forecast date, evaluated backtest folds, ML model version, model engine, and metric sensitivity setting.
+- Wrote backend unit test `test_get_global_anomalies` in `tests/test_anomalies.py` and frontend test suite `frontend/__tests__/anomalies_log.test.tsx`. All 39 backend pytest tests passing, all 14 frontend vitest tests passing.
+
+

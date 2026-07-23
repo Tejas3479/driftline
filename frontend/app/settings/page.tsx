@@ -1,0 +1,295 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import {
+  Settings,
+  Activity,
+  CheckCircle,
+  AlertTriangle,
+  Layers,
+  Cpu,
+  Calendar,
+  Zap,
+  Sliders,
+  Award,
+} from "lucide-react";
+import { useMetricContext } from "@/components/MetricContext";
+import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric } from "../api";
+
+export default function ModelHealthSettingsPage() {
+  const { selectedMetricId, setSelectedMetricId, metrics, loading: metricsLoading } = useMetricContext();
+
+  const [accuracy, setAccuracy] = useState<AccuracyResponse | null>(null);
+  const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const currentMetric = metrics.find((m) => m.id === selectedMetricId) || metrics[0];
+
+  useEffect(() => {
+    if (!currentMetric) return;
+
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    async function loadHealthData() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [accData, fcData] = await Promise.all([
+          fetchAccuracy(currentMetric.id, 30, "lightgbm", signal),
+          fetchForecast(currentMetric.id, 30, "lightgbm", signal),
+        ]);
+
+        setAccuracy(accData);
+        setForecast(fcData);
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+        console.error("Failed to load model health data:", err);
+        setError(err.message || "Failed to load model health data.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadHealthData();
+
+    return () => {
+      controller.abort();
+    };
+  }, [currentMetric]);
+
+  if (metricsLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <Activity className="h-8 w-8 animate-spin text-cyan-400" />
+      </main>
+    );
+  }
+
+  if (metrics.length === 0) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-24 text-slate-100">
+        <div className="max-w-md rounded-xl border border-slate-800 bg-slate-900 p-8 text-center">
+          <Settings className="mx-auto h-12 w-12 text-slate-600 mb-4" />
+          <h2 className="text-xl font-bold mb-2">No Metrics Configured</h2>
+          <p className="text-sm text-slate-400 mb-6">
+            Upload your first business metric data to configure settings and view model health telemetry.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-8 md:p-16">
+      <div className="mx-auto max-w-7xl">
+        {/* Page Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 border-b border-slate-800 pb-8">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Settings className="h-6 w-6 text-cyan-400" />
+              <span className="text-slate-400 text-xs font-extrabold uppercase tracking-widest">
+                System Telemetry & Controls
+              </span>
+            </div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">
+              Model Health & Settings
+            </h1>
+            <p className="text-slate-400 text-sm font-medium">
+              Monitor model calibration telemetry, MAPE accuracy track records, and metric parameters
+            </p>
+          </div>
+
+          {/* Metric Context Selector */}
+          <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-lg">
+            <Layers className="h-4 w-4 text-cyan-400" />
+            <span className="text-xs font-bold text-slate-400 uppercase">Target Metric:</span>
+            <select
+              value={currentMetric.id}
+              onChange={(e) => setSelectedMetricId(parseInt(e.target.value, 10))}
+              className="bg-slate-950 border border-slate-800 text-slate-100 text-xs font-bold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+            >
+              {metrics.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} (#{m.id})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* System Telemetry & Configuration Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+          {/* Column 1: Model Health Telemetry Cards */}
+          <div className="lg:col-span-2 space-y-6">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-cyan-400" /> Model Accuracy & Calibration Telemetry
+            </h2>
+
+            {loading ? (
+              <div className="flex h-64 items-center justify-center rounded-xl bg-slate-900 border border-slate-800">
+                <Activity className="h-8 w-8 animate-spin text-cyan-400" />
+              </div>
+            ) : error ? (
+              <div className="rounded-xl border border-red-900 bg-red-950/20 p-6 text-red-300 text-sm">
+                {error}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 12-Week MAPE Card */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
+                    <span>12-Week Backtest MAPE</span>
+                    <Award className="h-4 w-4 text-cyan-400" />
+                  </div>
+                  <div className="text-3xl font-extrabold text-white mb-2">
+                    {accuracy?.mape !== null && accuracy?.mape !== undefined
+                      ? `${(accuracy.mape * 100).toFixed(2)}%`
+                      : "Cold-Start (N/A)"}
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Mean Absolute Percentage Error evaluated over 12 weekly backtest folds
+                  </p>
+                </div>
+
+                {/* Interval Coverage Card */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
+                    <span>80% Interval Coverage</span>
+                    <Zap className="h-4 w-4 text-purple-400" />
+                  </div>
+                  <div className="text-3xl font-extrabold text-white mb-2">
+                    {accuracy?.coverage_pct !== null && accuracy?.coverage_pct !== undefined
+                      ? `${(accuracy.coverage_pct * 100).toFixed(1)}%`
+                      : "Cold-Start (N/A)"}
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Target calibration bounds: 80% (P10-P90 prediction interval)
+                  </p>
+                </div>
+
+                {/* Evaluated Folds Card */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
+                    <span>Backtest Evaluated Folds</span>
+                    <Layers className="h-4 w-4 text-blue-400" />
+                  </div>
+                  <div className="text-3xl font-extrabold text-white mb-2">
+                    {accuracy?.total_evaluations ?? 0}
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {accuracy?.ml_evaluations ?? 0} folds evaluated with ML pipeline
+                  </p>
+                </div>
+
+                {/* Forecast Baseline Date */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
+                    <span>Forecast Baseline Date</span>
+                    <Calendar className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-white mb-2 font-mono">
+                    {forecast?.as_of_date ?? "N/A"}
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Most recent data point as-of date for recursive model inference
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Model Architecture & Backend Engine */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                <Cpu className="h-4 w-4 text-purple-400" /> ML Pipeline Engine Specifications
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <span className="text-slate-500 font-bold block mb-1">MODEL BACKEND</span>
+                  <span className="font-extrabold text-cyan-400 uppercase">
+                    {accuracy?.model_backend ?? "lightgbm"}
+                  </span>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <span className="text-slate-500 font-bold block mb-1">MODEL VERSION</span>
+                  <span className="font-extrabold text-purple-400 font-mono">
+                    {forecast?.model_version ?? "lightgbm_v1.0"}
+                  </span>
+                </div>
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                  <span className="text-slate-500 font-bold block mb-1">CONFIDENCE STATUS</span>
+                  <span className="font-extrabold text-emerald-400">
+                    {forecast?.low_confidence ? (
+                      <span className="text-amber-400">Low Confidence (Cold)</span>
+                    ) : (
+                      "High Confidence (ML)"
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Metric Configuration Settings */}
+          <div className="space-y-6">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Sliders className="h-5 w-5 text-purple-400" /> Metric Configuration
+            </h2>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl space-y-6">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
+                  Metric Name & ID
+                </label>
+                <div className="text-lg font-extrabold text-white">
+                  {currentMetric.name} <span className="text-slate-500 text-xs font-mono">(#{currentMetric.id})</span>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-800" />
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
+                  Anomaly Detection Sensitivity
+                </label>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-cyan-300 uppercase">
+                  {currentMetric.sensitivity || "medium"}
+                </div>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Controls threshold scale factor for z-score & isolation forest scoring
+                </p>
+              </div>
+
+              <div className="h-px bg-slate-800" />
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
+                  Target Direction Preference
+                </label>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-emerald-300 uppercase">
+                  {currentMetric.direction_good || "up_is_good"}
+                </div>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Defines whether positive shifts indicate healthy or adverse trends
+                </p>
+              </div>
+
+              <div className="h-px bg-slate-800" />
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
+                  Data Grain
+                </label>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-purple-300 uppercase">
+                  {currentMetric.grain || "daily"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

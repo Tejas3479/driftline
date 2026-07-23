@@ -755,4 +755,39 @@ async def test_anomaly_feedback_status_false_positive():
         assert rev_res.status_code == 200
         assert rev_res.json()["status"] == "reviewed"
 
+@pytest.mark.asyncio
+async def test_get_global_anomalies():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={"name": "Global Anomaly Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_id = metric_res.json()["id"]
+
+        rows = []
+        start_d = date(2026, 6, 1)
+        for i in range(60):
+            d = start_d + timedelta(days=i)
+            val = 105.0 if i == 55 else 100.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": rows, "replace": True})
+
+        # Fetch global anomalies endpoint for this metric
+        global_res = await client.get(f"/anomalies?metric_id={metric_id}")
+        assert global_res.status_code == 200
+        anoms = global_res.json()
+        assert len(anoms) >= 1
+        
+        target = anoms[0]
+        assert target["metric_id"] == metric_id
+        assert target["metric_name"] == "Global Anomaly Metric"
+        assert target["status"] == "new"
+        assert "severity_score" in target
+        assert "anomaly_type" in target
+
+        # Test status filter query parameter
+        new_res = await client.get(f"/anomalies?metric_id={metric_id}&status=new")
+        assert new_res.status_code == 200
+        assert all(a["status"] == "new" for a in new_res.json())
+
+
+
 

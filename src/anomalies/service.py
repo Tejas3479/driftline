@@ -577,3 +577,45 @@ async def get_metric_timeseries(
             dimension_values=r.dimension_values
         ))
     return points, mad_val
+
+async def list_global_anomalies(
+    db: AsyncSession,
+    status_filter: Optional[str] = None,
+    metric_id: Optional[int] = None,
+    limit: int = 200
+) -> List[Dict[str, Any]]:
+    """
+    Returns a list of all detected anomalies joined with Metric names,
+    optionally filtered by status or metric_id, ordered by date descending.
+    """
+    stmt = (
+        select(Anomaly, Metric.name.label("metric_name"))
+        .join(Metric, Anomaly.metric_id == Metric.id)
+    )
+
+    if status_filter and status_filter.lower() != "all":
+        stmt = stmt.where(Anomaly.status == status_filter.lower())
+
+    if metric_id is not None:
+        stmt = stmt.where(Anomaly.metric_id == metric_id)
+
+    stmt = stmt.order_by(Anomaly.date.desc(), Anomaly.id.desc()).limit(limit)
+
+    res = await db.execute(stmt)
+    rows = res.all()
+
+    anomalies = []
+    for anom, m_name in rows:
+        anomalies.append({
+            "id": anom.id,
+            "metric_id": anom.metric_id,
+            "metric_name": m_name,
+            "date": anom.date,
+            "severity_score": float(anom.severity_score),
+            "anomaly_type": anom.type.value if hasattr(anom.type, "value") else str(anom.type),
+            "status": anom.status.value if hasattr(anom.status, "value") else str(anom.status),
+            "explanation_excerpt": anom.explanation_text,
+        })
+
+    return anomalies
+

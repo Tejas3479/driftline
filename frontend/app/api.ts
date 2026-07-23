@@ -220,4 +220,34 @@ export async function fetchSegmentComparison(
   return res.json();
 }
 
+export interface GlobalAnomaly {
+  id: number;
+  metric_id: number;
+  metric_name: string;
+  date: string;
+  severity_score: number;
+  anomaly_type: string;
+  status: string;
+  explanation_excerpt: string | null;
+}
+
+export async function fetchGlobalAnomalies(
+  status?: string,
+  metricId?: number,
+  signal?: AbortSignal
+): Promise<GlobalAnomaly[]> {
+  const params = new URLSearchParams();
+  if (status && status.toLowerCase() !== 'all') params.set('status', status.toLowerCase());
+  if (metricId) params.set('metric_id', metricId.toString());
+
+  const url = `${API_BASE_URL}/anomalies?${params.toString()}`;
+  const res = await fetch(url, { cache: 'no-store', signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch global anomalies log: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+
+
 

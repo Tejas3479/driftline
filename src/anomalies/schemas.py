@@ -35,3 +35,14 @@ class AnomalyDetailResponseSchema(AnomalyResponseSchema):
 
 class AnomalyFeedbackSchema(BaseModel):
     status: AnomalyStatusEnum
+
+class GlobalAnomalyResponseSchema(BaseModel):
+    id: int
+    metric_id: int
+    metric_name: str
+    date: date
+    severity_score: float
+    anomaly_type: str
+    status: str
+    explanation_excerpt: Optional[str] = None
+

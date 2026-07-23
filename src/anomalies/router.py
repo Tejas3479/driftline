@@ -4,10 +4,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.anomalies.models import AnomalyTypeEnum, AnomalyStatusEnum
-from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema, AnomalyFeedbackSchema
+from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema, AnomalyFeedbackSchema, GlobalAnomalyResponseSchema
 import src.anomalies.service as service
 
 router = APIRouter()
+
+@router.get("/anomalies", response_model=List[GlobalAnomalyResponseSchema])
+async def list_global_anomalies_endpoint(
+    status: Optional[str] = Query(None, description="Status filter e.g. new, reviewed, resolved, false_positive"),
+    metric_id: Optional[int] = Query(None, description="Metric ID filter"),
+    db: AsyncSession = Depends(get_db)
+):
+    return await service.list_global_anomalies(db, status_filter=status, metric_id=metric_id)
+
 
 @router.get("/metrics/{id}/timeseries", response_model=TimeseriesResponseSchema)
 async def get_metric_timeseries_endpoint(
