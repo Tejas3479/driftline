@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp } from "lucide-react";
 import { fetchMetrics, fetchTimeseries, fetchAnomalies, Metric, TimeseriesPoint, Anomaly } from "../../api";
+
 
 // Dynamically import Plotly chart component to prevent SSR window issues
 const MetricChart = dynamic(() => import("@/components/MetricChart"), {
@@ -169,22 +170,32 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
             </p>
           </div>
 
-          {/* Range Selector Controls */}
-          <div className="flex items-center bg-slate-900 p-1.5 rounded-xl border border-slate-800 shadow-lg">
-            {(["7d", "30d", "90d", "1y", "all"] as RangeFilter[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
-                  range === r
-                    ? "bg-cyan-500 text-slate-950 shadow-md"
-                    : "text-slate-400 hover:text-slate-100"
-                }`}
-              >
-                {r.toUpperCase()}
-              </button>
-            ))}
+          {/* Range Selector Controls & Forecast Link */}
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href={`/metrics/${metric.id}/forecast`}
+              className="inline-flex items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-bold text-white shadow-lg hover:bg-purple-500 transition"
+            >
+              <TrendingUp className="h-4 w-4" /> Forecast & Track Record →
+            </Link>
+
+            <div className="flex items-center bg-slate-900 p-1.5 rounded-xl border border-slate-800 shadow-lg">
+              {(["7d", "30d", "90d", "1y", "all"] as RangeFilter[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+                    range === r
+                      ? "bg-cyan-500 text-slate-950 shadow-md"
+                      : "text-slate-400 hover:text-slate-100"
+                  }`}
+                >
+                  {r.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
+
         </div>
 
         {/* Key Metrics Cards */}

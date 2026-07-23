@@ -2,7 +2,7 @@
 
 import React from "react";
 import Plot from "react-plotly.js";
-import { TimeseriesPoint, Anomaly } from "../app/api";
+import { TimeseriesPoint, Anomaly, ForecastPoint } from "../app/api";
 
 interface MetricChartProps {
   points: TimeseriesPoint[];
@@ -10,6 +10,7 @@ interface MetricChartProps {
   mad: number | null;
   metricName: string;
   unit: string | null;
+  forecastPoints?: ForecastPoint[];
 }
 
 const TYPE_COLORS = {
@@ -32,7 +33,9 @@ export default function MetricChart({
   mad,
   metricName,
   unit,
+  forecastPoints,
 }: MetricChartProps) {
+
   if (!points || points.length === 0) {
     return (
       <div className="flex h-96 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-400">
@@ -153,6 +156,65 @@ export default function MetricChart({
       hoverinfo: "text",
     });
   });
+
+  // 5. Forecast region: p10/p90 band + p50 dashed line
+  if (forecastPoints && forecastPoints.length > 0) {
+    const sortedForecasts = [...forecastPoints].sort(
+      (a, b) => new Date(a.forecast_date).getTime() - new Date(b.forecast_date).getTime()
+    );
+    const forecastDates = sortedForecasts.map((f) => f.forecast_date);
+    const p10Values = sortedForecasts.map((f) => f.p10);
+    const p50Values = sortedForecasts.map((f) => f.p50);
+    const p90Values = sortedForecasts.map((f) => f.p90);
+
+    // p10 lower bound (hidden line)
+    data.push({
+      x: forecastDates,
+      y: p10Values,
+      type: "scatter",
+      mode: "lines",
+      line: { width: 0 },
+      showlegend: false,
+      hoverinfo: "skip",
+    });
+
+    // p90 upper bound with fill to p10
+    data.push({
+      x: forecastDates,
+      y: p90Values,
+      type: "scatter",
+      mode: "lines",
+      fill: "tonexty",
+      fillcolor: "rgba(168, 85, 247, 0.15)", // subtle purple shading
+      line: { width: 0 },
+      name: "80% Prediction Band (p10–p90)",
+      showlegend: true,
+      hoverinfo: "skip",
+    });
+
+    // Connect p50 line from last actual point if available
+    const p50Dates = sortedPoints.length > 0
+      ? [sortedPoints[sortedPoints.length - 1].date, ...forecastDates]
+      : forecastDates;
+    const p50Y = sortedPoints.length > 0
+      ? [sortedPoints[sortedPoints.length - 1].value_total, ...p50Values]
+      : p50Values;
+
+    // Dashed p50 median forecast line
+    data.push({
+      x: p50Dates,
+      y: p50Y,
+      type: "scatter",
+      mode: "lines",
+      name: "Forecast (p50)",
+      line: {
+        color: "#a855f7", // vibrant purple
+        width: 2.5,
+        dash: "dash",
+      },
+    });
+  }
+
 
   // 5. Layout shapes: Vertical dashed lines colored by anomaly type
   const shapes = anomalies.map((anom) => {

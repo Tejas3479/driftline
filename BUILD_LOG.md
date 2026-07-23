@@ -79,11 +79,17 @@
 - Enforced $p_{10} \le p_{50} \le p_{90}$ non-crossing invariant via quantile rearrangement. Reconciled segment forecasts with total $p_{50}$ scaling while preserving raw uncertainty half-widths ($\Delta_{p10}, \Delta_{p90}$) to guarantee both sum equality and non-crossing automatically by construction.
 - Added scale-relative denominator guard ($\sum_s \hat{Y}_{s, p50} < 0.01 \times |\hat{Y}_{total, p50}|$), a 60-day minimum history exception hook, and updated `Forecast.dimension_values` to `JSONB` with key-sorted JSON serialization and PostgreSQL `ON CONFLICT DO UPDATE` upsert semantics.
 - Wrote 7 comprehensive unit/integration tests in `tests/test_forecasting.py`. All 34 backend pytest tests passing, all 7 frontend Vitest tests passing.
+
 ## Session 11: Walk-Forward Backtesting Pipeline, Accuracy Log, Cold-Start Fallback & Forecasting Router
 - Built expanding-window walk-forward backtesting engine (`run_walk_forward_backtest`) replaying the live multi-step recursive forecasting path across up to 12 weekly history folds ($t \le \text{cutoff\_date}$), asserting $\max(\text{train\_dates}) < \min(\text{prediction\_dates})$ to guarantee zero future data leakage.
 - Implemented cold-start fallback path for metrics/folds with $<60$ days history using seasonal-naive with trend adjustment ($\hat{Y}_{t, p50} = \text{value}_{t-7} \times \frac{\text{trend}_t}{\text{trend}_{t-7}}$), heuristic residual std bounds ($1.28 \times \sigma_{res}$), and returning `low_confidence = True`.
 - Added `save_to_db` parameter plumbing to `generate_multi_step_forecast`, ensuring backtest runs do not pollute live `forecasts` table, and derived `used_ml_model = not low_confidence` directly from each fold's response.
 - Implemented `ForecastAccuracyLog` database table and `GET /metrics/{id}/forecast` / `GET /metrics/{id}/accuracy` FastAPI endpoints with scale-relative zero-actual guards on MAPE (`actual < 0.01 * mean_val` excluded from percentage calculations, MAE computed on all dates) and null-safe empty evaluated row protections (`coverage_pct = None` when `ml_evaluations == 0`).
 - Demo Dataset Accuracy: Observed backtest MAPE on demo dataset is **2.76%** (0.0276). All 37 backend pytest tests passing, all 7 frontend Vitest tests passing.
-- Next session context: Forecasting backtesting pipeline, cold-start fallback, accuracy log, and endpoints are fully operational. Ready for Session 12 (Frontend Forecast & Accuracy Visualization components).
 
+## Session 12: Forecast Visualization & Model Track Record Screen
+- Built Next.js forecast detail page (`/metrics/[id]/forecast`) and components: `LowConfidenceBanner`, `ForecastStatsPanel`, `ForecastVsActualChart`, and extended `MetricChart`.
+- Extended `MetricChart` to project dashed purple $p_{50}$ median line and shaded $p_{10}\dots p_{90}$ prediction band beyond actual dates, using two strictly consecutive Plotly traces (`fill: "tonexty"`) and setting range cutoff reference to `max(actual_date, forecast_end_date)`.
+- Built separate `ForecastVsActualChart` track record visualization plotting historical `predicted_p50` vs `actual` from `/metrics/{id}/accuracy`, visually distinguishing seasonal-naive fallback folds (`used_ml_model = false`) with gray diamond markers.
+- Added `ForecastStatsPanel` displaying 12-week MAPE, interval coverage percentage with target bounds, evaluated fold counts, model engine version, and null-safe fallback text for cold-start metrics.
+- Added unit tests in `frontend/__tests__/forecast.test.tsx`. All 37 backend pytest tests passing, all 9 frontend vitest tests passing.

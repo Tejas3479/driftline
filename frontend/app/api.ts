@@ -120,3 +120,76 @@ export async function submitAnomalyFeedback(
   }
   return res.json();
 }
+
+export interface ForecastPoint {
+  metric_id: number;
+  forecast_date: string;
+  horizon_days: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  dimension_values: Record<string, string>;
+  model_version: string;
+}
+
+export interface ForecastResult {
+  metric_id: number;
+  horizon_days: number;
+  as_of_date: string;
+  model_version: string;
+  low_confidence: boolean;
+  forecasts: ForecastPoint[];
+}
+
+export interface AccuracyPoint {
+  date: string;
+  predicted_p50: number;
+  actual: number;
+  abs_error: number;
+  abs_pct_error: number | null;
+  in_bounds: boolean | null;
+  predicted_p10: number | null;
+  predicted_p90: number | null;
+  used_ml_model: boolean;
+}
+
+export interface AccuracyResponse {
+  metric_id: number;
+  horizon_days: number;
+  model_backend: string;
+  mape: number | null;
+  mae: number | null;
+  coverage_pct: number | null;
+  total_evaluations: number;
+  ml_evaluations: number;
+  points: AccuracyPoint[];
+}
+
+export async function fetchForecast(
+  metricId: number,
+  horizon: number = 30,
+  backend: string = 'lightgbm',
+  signal?: AbortSignal
+): Promise<ForecastResult> {
+  const url = `${API_BASE_URL}/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}`;
+  const res = await fetch(url, { cache: 'no-store', signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch forecast for metric ${metricId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchAccuracy(
+  metricId: number,
+  horizon: number = 30,
+  backend: string = 'lightgbm',
+  signal?: AbortSignal
+): Promise<AccuracyResponse> {
+  const url = `${API_BASE_URL}/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}`;
+  const res = await fetch(url, { cache: 'no-store', signal });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch forecast accuracy for metric ${metricId}: ${res.statusText}`);
+  }
+  return res.json();
+}
+
