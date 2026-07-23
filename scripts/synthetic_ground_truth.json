@@ -1,0 +1,120 @@
+{
+  "dataset_name": "Synthetic 2-Year Daily MRR",
+  "seed": 42,
+  "num_days": 731,
+  "num_segments": 9,
+  "date_start": "2024-01-01",
+  "date_end": "2025-12-31",
+  "total_rows": 6579,
+  "injected_anomalies": [
+    {
+      "id": "anomaly_1_spike",
+      "type": "spike",
+      "date": "2024-04-29",
+      "day_index": 120,
+      "affected_dimension": "channel",
+      "affected_channel": "Paid",
+      "affected_segments": [
+        {
+          "plan": "Enterprise",
+          "channel": "Paid",
+          "per_segment_magnitude": 2666.6667
+        },
+        {
+          "plan": "SMB",
+          "channel": "Paid",
+          "per_segment_magnitude": 2666.6667
+        },
+        {
+          "plan": "Self-serve",
+          "channel": "Paid",
+          "per_segment_magnitude": 2666.6667
+        }
+      ],
+      "total_magnitude": 8000.0,
+      "tolerance_window_days": {
+        "before": 1,
+        "after": 1
+      },
+      "description": "Paid-channel-driven promotional revenue spike (+$8,000.00 total across Paid channel segments)"
+    },
+    {
+      "id": "anomaly_2_dip",
+      "type": "dip",
+      "date": "2024-10-06",
+      "day_index": 280,
+      "affected_dimension": "plan",
+      "affected_plan": "Enterprise",
+      "affected_segments": [
+        {
+          "plan": "Enterprise",
+          "channel": "Organic",
+          "per_segment_magnitude": -2166.6667
+        },
+        {
+          "plan": "Enterprise",
+          "channel": "Paid",
+          "per_segment_magnitude": -2166.6667
+        },
+        {
+          "plan": "Enterprise",
+          "channel": "Referral",
+          "per_segment_magnitude": -2166.6667
+        }
+      ],
+      "total_magnitude": -6500.0,
+      "tolerance_window_days": {
+        "before": 1,
+        "after": 1
+      },
+      "description": "Enterprise-plan-driven revenue drop (-$6,500.00 total across Enterprise plan segments)"
+    },
+    {
+      "id": "anomaly_3_level_shift",
+      "type": "level_shift",
+      "date_start": "2025-03-25",
+      "date_end": "2025-12-31",
+      "day_index_start": 450,
+      "day_index_end": 731,
+      "affected_dimension": "global",
+      "affected_segments": "all",
+      "magnitude_multiplier": 1.15,
+      "magnitude_pct": 15.0,
+      "tolerance_window_days": {
+        "before": 0,
+        "after": 30
+      },
+      "description": "Pricing-change-driven permanent +15% step increase across all segments from 2025-03-25 to 2025-12-31"
+    },
+    {
+      "id": "anomaly_4_volatility",
+      "type": "volatility",
+      "date_start": "2025-08-22",
+      "date_end": "2025-09-05",
+      "day_index_start": 600,
+      "day_index_end": 614,
+      "affected_dimension": "plan",
+      "affected_plan": "Self-serve",
+      "affected_segments": [
+        {
+          "plan": "Self-serve",
+          "channel": "Organic"
+        },
+        {
+          "plan": "Self-serve",
+          "channel": "Paid"
+        },
+        {
+          "plan": "Self-serve",
+          "channel": "Referral"
+        }
+      ],
+      "variance_multiplier": 4.5,
+      "tolerance_window_days": {
+        "before": 2,
+        "after": 2
+      },
+      "description": "Self-serve plan volatility change period with 4.5x day-to-day noise scaling from 2025-08-22 to 2025-09-05"
+    }
+  ]
+}

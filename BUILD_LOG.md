@@ -126,6 +126,18 @@
 - Decisions: Integrated alert triggering at the end of `run_daily_pipeline` and digest email sending at the end of `run_weekly_retrain_and_digest`. Unconfigured metrics default to `min_severity = 80.0` and `channels = ["in_app"]`.
 - Next session context: Email digest and alert distribution operational. All 47 backend pytest tests passing cleanly.
 
+## Session 17: Synthetic Data Generator with Ground Truth Injection & Determinism Test
+- Built `scripts/generate_synthetic_data.py` generating 2 full calendar years (731 days: `2024-01-01` to `2025-12-31` inclusive, accounting for leap year 2024) of daily MRR data across 9 segment combinations ($731 \times 9 = 6,579$ rows) saved to canonical path `demo_data/synthetic_mrr.csv`.
+- Generated `scripts/synthetic_ground_truth.json` recording 4 injected ground-truth anomalies:
+  1. SPIKE: `2024-04-29` (Day 120) — Paid channel promotional spike ($+\$8,000.00$ total / $+\$2,666.67$ per segment).
+  2. DIP: `2024-10-06` (Day 280) — Enterprise plan revenue drop ($-\$6,500.00$ total / $-\$2,166.67$ per segment).
+  3. LEVEL-SHIFT: `2025-03-25` to `2025-12-31` (Days 450..731) — Global pricing $+15.0\%$ step increase across all segments (`tolerance_window_days: {"before": 0, "after": 30}`).
+  4. VOLATILITY: `2025-08-22` to `2025-09-05` (Days 600..614) — Self-serve plan noise scaled by $\times 4.5$ ($\text{noise}_{\text{vol}} = 4.5 \times \text{noise}_{\text{base}}$) on top of level-shifted baseline.
+- Wrote [tests/test_synthetic_generator.py](file:///c:/Users/tejas/Downloads/driftline/tests/test_synthetic_generator.py) testing byte-for-byte determinism (`seed=42`), schema structure (6,579 rows), and diff-based numerical correctness ($\Delta = \text{Series}_{\text{injected}} - \text{Series}_{\text{base}}$).
+- Decisions: Used `np.random.default_rng(seed)` for modern random generator isolation, explicitly cast all NumPy values to native Python types before JSON serialization, applied cumulative anomaly ordering, and recorded explicit asymmetric tolerance windows.
+- Next session context: Synthetic 2-year 9-segment dataset and ground-truth specification are generated and verified. Ready for Session 18 (End-to-end evaluation benchmark: precision/recall, driver attribution accuracy, forecast backtest MAPE).
+
+
 
 
 
