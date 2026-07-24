@@ -18,49 +18,114 @@ Modern revenue and business operations teams face a critical market gap:
 
 Driftline follows a domain-module architecture where every pipeline stage persists its output to PostgreSQL.
 
+### End-to-End ML Pipeline Data Flow
+
+```mermaid
+graph TD
+    subgraph Ingestion["1. Ingestion Domain"]
+        A["Raw CSV File"] --> B["Polars Validation Engine"]
+        B --> C["Observations Table"]
+    end
+
+    subgraph Decomposition["2. Time Series Decomposition"]
+        C --> D["Marginal Daily Rollups"]
+        D --> E["Rolling Window Decomposition<br/>(Trend + Seasonal + Residual)"]
+    end
+
+    subgraph Detection["3. Anomaly Detection Engine"]
+        E --> F["Robust Z-Score (MAD)"]
+        E --> G["IsolationForest (scikit-learn)"]
+        F --> H["Multi-Class Classifier<br/>(Spike, Dip, Level-Shift, Volatility)"]
+        G --> H
+        H --> I["Anomalies Table"]
+    end
+
+    subgraph Drivers["4. Root-Cause Driver Analysis"]
+        I --> J["Waterfall Bridge Attribution<br/>(Segment Deltas)"]
+        I --> K["CatBoost Structural Importance"]
+        J --> L["Anomaly Drivers Table"]
+        K --> L
+    end
+
+    subgraph Forecasting["5. Short-Horizon Quantile Forecasting"]
+        E --> M["Trailing-Only Feature Engineering"]
+        M --> N["LightGBM / XGBoost Quantile Regressors<br/>(p10, p50, p90)"]
+        N --> O["Walk-Forward Backtesting Engine"]
+        O --> P["Forecasts & Accuracy Log"]
+    end
+
+    subgraph Output["6. Digest & UI Layer"]
+        P --> Q["Interactive Next.js Frontend"]
+        I --> Q
+        P --> R["Matplotlib PDF Digest & Email Alerts"]
+    end
+
+    style Ingestion fill:#f1f5f9,stroke:#64748b,stroke-width:1px
+    style Decomposition fill:#eff6ff,stroke:#3b82f6,stroke-width:1px
+    style Detection fill:#fff1f2,stroke:#f43f5e,stroke-width:1px
+    style Drivers fill:#f0fdf4,stroke:#22c55e,stroke-width:1px
+    style Forecasting fill:#faf5ff,stroke:#a855f7,stroke-width:1px
+    style Output fill:#fff7ed,stroke:#f97316,stroke-width:1px
 ```
-                  +-----------------------------------+
-                  |   Multi-Dimensional CSV Ingest    |
-                  |     (Polars Validation Report)    |
-                  +-----------------+-----------------+
-                                    |
-                                    v
-                  +-----------------------------------+
-                  |  Marginal Rollup & Decomposition  |
-                  |  (Pandas Trend / Season / Residual|
-                  +-----------------+-----------------+
-                                    |
-                                    v
-                  +-----------------------------------+
-                  |    Hybrid Anomaly Detection       |
-                  | (Robust MAD Z-Score + IsoForest)  |
-                  +-----------------+-----------------+
-                                    |
-                                    v
-                  +-----------------------------------+
-                  |     Root-Cause Driver Analysis    |
-                  | (Waterfall Bridge + CatBoost GBDT)|
-                  +-----------------+-----------------+
-                                    |
-                                    v
-                  +-----------------------------------+
-                  |    Short-Horizon Quantile Forecast|
-                  |  (LightGBM / XGBoost p10/p50/p90) |
-                  +-----------------+-----------------+
-                                    |
-                                    v
-                  +-----------------------------------+
-                  |      Walk-Forward Backtesting     |
-                  |    (MAPE / Interval Coverage Log) |
-                  +-----------------+-----------------+
-                                    |
-         +--------------------------+--------------------------+
-         |                                                     |
-         v                                                     v
-+----------------------------------+        +----------------------------------+
-|   Interactive Next.js Frontend   |        |   Automated Executive Digest     |
-|   (Plotly / Vega-Embed Viz)      |        |   (Matplotlib PDF & Email Alerts)|
-+----------------------------------+        +----------------------------------+
+
+### Database Entity-Relationship (ER) Diagram
+
+```mermaid
+erDiagram
+    WORKSPACES ||--o{ METRICS : contains
+    METRICS ||--o{ OBSERVATIONS : has
+    METRICS ||--o{ DAILY_ROLLUPS : aggregates
+    METRICS ||--o{ ANOMALIES : detects
+    ANOMALIES ||--o{ ANOMALY_DRIVERS : explains
+    METRICS ||--o{ FORECASTS : projects
+    METRICS ||--o{ FORECAST_ACCURACY_LOG : tracks
+    METRICS ||--o{ DIGESTS : generates
+    METRICS ||--o{ ALERT_RULES : configures
+    ANOMALIES ||--o| NOTIFICATIONS : triggers
+
+    WORKSPACES {
+        int id PK
+        string name
+        datetime created_at
+    }
+
+    METRICS {
+        int id PK
+        int workspace_id FK
+        string name
+        string unit
+        string direction_good
+        string sensitivity
+        float z_score_weight
+    }
+
+    OBSERVATIONS {
+        int id PK
+        int metric_id FK
+        date date
+        float value
+        jsonb dimension_values
+    }
+
+    ANOMALIES {
+        int id PK
+        int metric_id FK
+        date date
+        float severity_score
+        string type
+        float z_score
+        float isolation_score
+        string status
+    }
+
+    FORECASTS {
+        int id PK
+        int metric_id FK
+        date forecast_date
+        float p10
+        float p50
+        float p90
+    }
 ```
 
 ---
