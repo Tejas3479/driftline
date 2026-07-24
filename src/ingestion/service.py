@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Set
 import pandas as pd
 import polars as pl
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Workspace
@@ -46,12 +46,35 @@ def is_numeric(val: Any) -> bool:
     except (ValueError, TypeError):
         return False
 
+async def seed_default_workspace(db: AsyncSession) -> Workspace:
+    """
+    Atomically seeds default Workspace (ID #1) if missing using ON CONFLICT DO NOTHING,
+    and updates PostgreSQL sequence to prevent auto-increment ID collisions.
+    """
+    await db.execute(
+        text(
+            "INSERT INTO workspaces (id, name, created_at) "
+            "VALUES (1, 'Default Workspace', NOW()) "
+            "ON CONFLICT (id) DO NOTHING;"
+        )
+    )
+    await db.execute(
+        text(
+            "SELECT setval('workspaces_id_seq', (SELECT GREATEST(MAX(id), 1) FROM workspaces));"
+        )
+    )
+    await db.commit()
+    res = await db.execute(select(Workspace).where(Workspace.id == 1))
+    return res.scalar_one()
+
 async def ensure_workspace_exists(db: AsyncSession, workspace_id: int = 1) -> Workspace:
     """Ensure workspace with given ID exists, creating default if missing."""
+    if workspace_id == 1:
+        return await seed_default_workspace(db)
     result = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     workspace = result.scalar_one_or_none()
     if not workspace:
-        workspace = Workspace(id=workspace_id, name="Default Workspace")
+        workspace = Workspace(id=workspace_id, name=f"Workspace #{workspace_id}")
         db.add(workspace)
         await db.commit()
         await db.refresh(workspace)
@@ -59,9 +82,10 @@ async def ensure_workspace_exists(db: AsyncSession, workspace_id: int = 1) -> Wo
 
 async def create_metric(db: AsyncSession, schema: MetricCreateSchema) -> Metric:
     """Create a new metric configuration."""
-    await ensure_workspace_exists(db, schema.workspace_id)
+    ws_id = schema.workspace_id or 1
+    await ensure_workspace_exists(db, ws_id)
     metric = Metric(
-        workspace_id=schema.workspace_id,
+        workspace_id=ws_id,
         name=schema.name,
         unit=schema.unit,
         direction_good=schema.direction_good,

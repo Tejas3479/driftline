@@ -23,16 +23,37 @@ services:
       dockerfile: Dockerfile
     container_name: driftline-backend
     restart: always
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
     volumes:
       - .:/app
+      - ./demo_data:/app/demo_data
+      - digest_storage:/app/storage/digests
     environment:
       DATABASE_URL: postgresql+asyncpg://driftline:driftline@db:5432/driftline_db
       PORT: "8000"
+      CORS_ORIGINS: "http://localhost:3000"
+      DIGEST_STORAGE_DIR: "/app/storage/digests"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    container_name: driftline-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
+  digest_storage:

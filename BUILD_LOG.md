@@ -137,6 +137,48 @@
 - Decisions: Used `np.random.default_rng(seed)` for modern random generator isolation, explicitly cast all NumPy values to native Python types before JSON serialization, applied cumulative anomaly ordering, and recorded explicit asymmetric tolerance windows.
 - Next session context: Synthetic 2-year 9-segment dataset and ground-truth specification are generated and verified. Ready for Session 18 (End-to-end evaluation benchmark: precision/recall, driver attribution accuracy, forecast backtest MAPE).
 
+## Session 18: Whole-Pipeline Evaluation Benchmark & Quality Regression Test Suite
+- Built permanent evaluation benchmark script [scripts/evaluate_pipeline.py](file:///c:/Users/tejas/Downloads/driftline/scripts/evaluate_pipeline.py) running full pipeline (ingestion → decomposition → anomaly detection → driver analysis → CatBoost structural importance → 12-week walk-forward backtest → 30-day quantile forecasting) against Session 17 synthetic dataset (`demo_data/synthetic_mrr.csv`).
+- Evaluated model outputs against `scripts/synthetic_ground_truth.json`:
+  | METRIC NAME | VALUE | BENCHMARK TARGET | STATUS |
+  |---|---|---|---|
+  | `detection_recall` | 100.00% | $\ge 75.0\%$ (4/4 GT events) | PASS |
+  | `classification_accuracy` | 100.00% | $\ge 75.0\%$ type match | PASS |
+  | `false_positive_rate` | 0.89% | $\le 10.0\%$ (6/675 untouched days) | PASS |
+  | `driver_accuracy` | 100.00% | $\ge 66.0\%$ (3/3 segment events) | PASS |
+  | `uniform_shift_proportionality` | True | $15.0\% \pm 3.0\%$ all segments | PASS (mean 15.0%) |
+  | `forecast_MAPE` (12w) | 3.20% | $\le 15.0\%$ held-out backtest | PASS |
+  | `interval_coverage` ($p_{10}\dots p_{90}$) | 92.86% | $65.0\%\dots 95.0\%$ calibration | PASS |
+- Key Diagnostics & Rationale:
+  - Detection & Classification: Spike ($z=3.82$), Dip ($z=-3.21$), Level-Shift ($\Delta trend > 3\times MAD$), and Volatility ($\text{std}_{local}/\text{std}_{hist} > 3.0$) cleared detection thresholds and matched expected classifications.
+  - False Positive Rate: 0.89% (6/675 untouched days) aligns with expected tail probability of Gaussian noise under robust $2.5\sigma$ z-score threshold.
+  - Driver Attribution: Waterfall bridge correctly isolated top segments `channel: Paid` ($+\$8,000$), `plan: Enterprise` ($-\$6,500$), and `plan: Self-serve` ($4.5\times$ noise peak deviation date).
+- Wrote CI regression test suite [tests/test_pipeline_evaluation.py](file:///c:/Users/tejas/Downloads/driftline/tests/test_pipeline_evaluation.py). All 49 backend pytest tests passing cleanly (49/49).
+
+## Session 19: Final Stack Scaffolding, Documentation & End-to-End Verification
+- **Stack Finalization**: Built `frontend/Dockerfile` with `NEXT_PUBLIC_API_URL` build-argument support and finalized `docker-compose.yml` orchestrating PostgreSQL 16 (`db`), FastAPI backend (`backend`), and Next.js frontend (`frontend`). Added volume mounts for persistent PDF digest storage (`digest_storage:/app/storage/digests`) and synthetic demo data (`./demo_data:/app/demo_data`).
+- **Database & Application Seeding**: Added atomic default workspace seeding (`seed_default_workspace`) using PostgreSQL `ON CONFLICT (id) DO NOTHING` and sequence synchronization (`SELECT setval(...)`) in `main.py` lifespan manager on startup. Updated `MetricCreateSchema` to default `workspace_id = 1` for seamless ingestion.
+- **Environment & Documentation**: Created fully documented `.env.example` template and comprehensive `README.md` containing product overview, market gap analysis, ASCII architecture diagram, 15-minute containerized getting started instructions, evaluation benchmark execution steps, and walkthrough of all 7 core UI screens.
+- **Backend Quality Audit**: Re-verified core backend invariants across all domain modules:
+  1. `AsyncIOScheduler` lifespan binding in `main.py`.
+  2. Alert left-anti-join filtering excluding `false_positive` and `resolved` anomalies.
+  3. Single-source `compute_scaled_mad` calculation across decomposition and API routers.
+  4. Trailing-only feature engineering in forecasting (`.shift(1)` to guarantee zero look-ahead leakage).
+  5. Walk-forward backtest expanding window recursive prediction replay.
+- **Final Evaluation Benchmark Results**:
+  | METRIC NAME | Measured VALUE | BENCHMARK TARGET | STATUS |
+  |---|---|---|---|
+  | `detection_recall` | 100.00% | $\ge 75.0\%$ (4/4 GT events) | PASS |
+  | `classification_accuracy` | 100.00% | $\ge 75.0\%$ type match | PASS |
+  | `false_positive_rate` | 1.66% | $\le 10.0\%$ (11/662 untouched days) | PASS |
+  | `driver_accuracy` | 100.00% | $\ge 66.0\%$ (3/3 segment events) | PASS |
+  | `uniform_shift_proportionality` | True | $15.0\% \pm 3.0\%$ all segments | PASS (mean 15.0%) |
+  | `forecast_MAPE` (12w) | 2.64% | $\le 15.0\%$ held-out backtest | PASS |
+  | `interval_coverage` ($p_{10}\dots p_{90}$) | 92.86% | $60.0\%\dots 95.0\%$ calibration | PASS |
+- **Project Status**: Complete. All 49 backend pytest unit & integration tests and 14 frontend vitest tests passing cleanly.
+
+
+
 
 
 

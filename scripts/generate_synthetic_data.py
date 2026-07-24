@@ -168,10 +168,12 @@ def generate_synthetic_dataset(seed: int = 42, inject_anomalies: bool = True) ->
         df.loc[mask_spike, "value"] = df.loc[mask_spike, "value"] + per_paid_spike
 
         # Step 5: Apply DIP (-$6,500.00 total across Enterprise plan on 2024-10-06)
+        # Distribute -$6,500 total drop proportionally by channel shares so all segment revenues remain positive
         dip_date = date(2024, 10, 6)
-        mask_dip = (df["date_obj"] == dip_date) & (df["plan"] == "Enterprise")
-        per_enterprise_dip = -6500.0 / 3.0
-        df.loc[mask_dip, "value"] = df.loc[mask_dip, "value"] + per_enterprise_dip
+        for channel_name, c_share in CHANNEL_SHARES.items():
+            mask_dip = (df["date_obj"] == dip_date) & (df["plan"] == "Enterprise") & (df["channel"] == channel_name)
+            seg_dip = -6500.0 * c_share
+            df.loc[mask_dip, "value"] = df.loc[mask_dip, "value"] + seg_dip
 
     # Clean up value column format (round to 2 decimal places)
     df["mrr"] = df["value"].round(2)

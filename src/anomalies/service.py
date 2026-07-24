@@ -373,7 +373,7 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
             if idx >= 3 and idx < len(df_valid) - 3:
                 adjacent_indices = [idx - 1, idx + 1]
                 adjacent_elevated = any(
-                    abs(df_valid.loc[adj, "robust_z"]) > 1.0 
+                    abs(df_valid.loc[adj, "robust_z"]) > 1.8 
                     for adj in adjacent_indices 
                     if adj in df_valid.index
                 )
