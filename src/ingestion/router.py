@@ -49,6 +49,18 @@ async def update_metric_endpoint(
     metric = await verify_metric_access(id, db, current_user.workspace_id)
     return await service.update_metric(db, metric, schema)
 
+@router.delete("/metrics/{id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("20/minute")
+async def delete_metric_endpoint(
+    request: Request,
+    id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    metric = await verify_metric_access(id, db, current_user.workspace_id)
+    await service.delete_metric(db, metric)
+    return None
+
 @router.post("/metrics/{id}/data", response_model=InspectionResponseSchema)
 @limiter.limit("20/minute")
 async def upload_and_inspect_data_endpoint(

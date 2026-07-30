@@ -374,6 +374,15 @@ export async function updateMetric(metricId: number, payload: MetricUpdateSchema
   return res.json();
 }
 
+export async function deleteMetric(metricId: number): Promise<void> {
+  const res = await apiFetch(`${API_BASE_URL}/metrics/${metricId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to delete metric ${metricId}`);
+  }
+}
+
 export async function inspectCsvData(metricId: number, file: File): Promise<InspectionResponseSchema> {
   const formData = new FormData();
   formData.append('file', file);

@@ -412,3 +412,10 @@ async def list_metrics(db: AsyncSession, workspace_id: int) -> List[Metric]:
     """
     result = await db.execute(select(Metric).where(Metric.workspace_id == workspace_id).order_by(Metric.id))
     return list(result.scalars().all())
+
+async def delete_metric(db: AsyncSession, metric: Metric) -> None:
+    """
+    Delete a metric configuration and all related cascading data.
+    """
+    await db.delete(metric)
+    await db.commit()

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useMetricContext } from "@/components/MetricContext";
-import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric, updateMetric } from "@/app/api";
+import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric, updateMetric, deleteMetric } from "@/app/api";
 import CustomSelect from "@/components/CustomSelect";
 
 export default function ModelHealthSettingsPage() {
@@ -60,6 +60,27 @@ export default function ModelHealthSettingsPage() {
       setError(err.message || "Failed to save settings");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const handleDeleteMetric = async () => {
+    if (!currentMetric) return;
+    const confirmDelete = window.confirm(
+      `Are you sure you want to permanently delete metric "${currentMetric.name}"? This action cannot be undone and will delete all associated data.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      setError(null);
+      await deleteMetric(currentMetric.id);
+      // Let the context handle switching to another metric or showing the empty state
+      await refetchMetrics(); 
+    } catch (err: any) {
+      setError(err.message || "Failed to delete metric");
+      setIsDeleting(false);
     }
   };
 
@@ -381,6 +402,17 @@ export default function ModelHealthSettingsPage() {
                     <CheckCircle className="h-4 w-4" /> Settings updated successfully
                   </div>
                 )}
+              </div>
+              
+              <div className="pt-6 mt-6 border-t border-slate-800">
+                <button 
+                  onClick={handleDeleteMetric}
+                  disabled={isDeleting || isSaving}
+                  className="w-full flex items-center justify-center gap-2 bg-slate-900/50 border border-red-900/50 hover:bg-red-950 hover:border-red-500 hover:text-red-300 text-red-500 font-bold py-2.5 px-4 rounded-lg transition-all disabled:opacity-50 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+                >
+                  {isDeleting ? <Activity className="h-5 w-5 animate-spin" /> : <AlertTriangle className="h-5 w-5" />}
+                  {isDeleting ? "Deleting..." : "Permanently Delete Metric"}
+                </button>
               </div>
             </div>
           </div>

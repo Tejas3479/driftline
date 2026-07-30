@@ -241,3 +241,10 @@
 - Built reusable premium glassmorphic `<LoadingUI />` component in `components/LoadingUI.tsx` using `framer-motion` and `lucide-react`. It provides instant, engaging feedback with animated glow rings and pulse effects during route transitions or data fetching.
 - Decisions: Ensured loading states perfectly match the cinematic and glassmorphic aesthetic of the platform, resolving the partial loading state issue identified in the audit.
 - Next session context: Frontend loading states and error boundaries are fully integrated.
+
+## Session 28: Metric Deletion
+- Implemented `DELETE /metrics/{id}` API endpoint in `src/ingestion/router.py` to allow permanent removal of metrics.
+- Added `delete_metric` service function leveraging SQLAlchemy's `ondelete="CASCADE"` foreign key constraints to cleanly wipe all associated observations, daily rollups, anomalies, forecasts, and alert rules without manual cascade handling.
+- Integrated `deleteMetric` API client method in `frontend/app/api.ts` and added a `framer-motion` styled "Permanently Delete Metric" danger button with confirmation prompts in the Model Health & Settings page (`app/(dashboard)/settings/page.tsx`).
+- Decisions: Relied exclusively on DB-level cascading `ON DELETE CASCADE` to maintain referential integrity. Exposed deletion directly inside the metric settings panel rather than a global list.
+- Next session context: Full CRUD lifecycle for metrics is now complete.
