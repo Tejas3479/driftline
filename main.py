@@ -52,23 +52,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(ingestion_router)
-app.include_router(ingestion_router, prefix="/api/v1")
-
-app.include_router(anomalies_router)
-app.include_router(anomalies_router, prefix="/api/v1")
-
-app.include_router(drivers_router)
-app.include_router(drivers_router, prefix="/api/v1")
-
-app.include_router(forecasting_router)
-app.include_router(forecasting_router, prefix="/api/v1")
-
-app.include_router(digests_router)
-app.include_router(digests_router, prefix="/api/v1")
-
-app.include_router(alerts_router)
-app.include_router(alerts_router, prefix="/api/v1")
+# Domain routers: primary mounts exposed in OpenAPI schema, fallback mounts for /api/v1 prefix compatibility
+for r in [ingestion_router, anomalies_router, drivers_router, forecasting_router, digests_router, alerts_router]:
+    app.include_router(r)
+    app.include_router(r, prefix="/api/v1", include_in_schema=False)
 
 @app.get("/health")
 async def health_check():

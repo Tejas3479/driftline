@@ -6,11 +6,12 @@ import pandas as pd
 import altair as alt
 from catboost import CatBoostRegressor, Pool
 from fastapi import HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ingestion.models import Metric, Observation, DimensionDef, DirectionGoodEnum
 from src.anomalies.models import Anomaly, DailyRollup
+from src.drivers.models import AnomalyDriver
 from src.drivers.schemas import SegmentContributionSchema, StructuralImportanceSchema, AnomalyDriversResponseSchema
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,22 @@ async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int) -> Dict[s
         dimension_segments=dimension_segments.get(selected_dimension, []) if selected_dimension else []
     )
 
+    # Persist AnomalyDriver records to DB (compliance with AGENTS.md rule)
+    await db.execute(delete(AnomalyDriver).where(AnomalyDriver.anomaly_id == anomaly.id))
+    driver_records = []
+    for rank_idx, seg in enumerate(valid_segments_all, start=1):
+        driver_records.append(AnomalyDriver(
+            anomaly_id=anomaly.id,
+            dimension_name=seg["dimension"],
+            dimension_value=seg["segment_value"],
+            contribution_value=seg["delta"],
+            contribution_pct=seg["contribution_pct"],
+            rank=rank_idx
+        ))
+    if driver_records:
+        db.add_all(driver_records)
+    await db.commit()
+
     # Fetch structural importance from metric model
     raw_structural = metric.structural_importance or []
     structural_importance = [
@@ -173,78 +190,72 @@ def compose_explanation_text(
     # 2. Determine semantic direction word
     is_up = total_delta > 0
     if is_up:
-        direction_word = "increased" if direction_good == DirectionGoodEnum.up_is_good else "declined"
+        direction_word = "Increased" if direction_good == DirectionGoodEnum.up_is_good else "Declined"
     else:
-        direction_word = "declined" if direction_good == DirectionGoodEnum.up_is_good else "improved"
+        direction_word = "Declined" if direction_good == DirectionGoodEnum.up_is_good else "Improved"
 
     # Percentage calculation (unsigned)
-    if baseline_expected_total != 0:
-        pct_val = abs(total_delta) / abs(baseline_expected_total) * 100.0
-    else:
-        pct_val = 0.0
-
+    pct_val = (abs(total_delta) / baseline_expected_total) * 100.0 if baseline_expected_total > 0 else 0.0
+    pct_str = f"{pct_val:.1f}%"
     delta_str = f"{abs(total_delta):.1f}".rstrip('0').rstrip('.')
-    pct_str = f"{pct_val:.1f}".rstrip('0').rstrip('.')
 
-    sentence_1 = f"{direction_word.capitalize()} {delta_str} ({pct_str}%) vs its 28-day baseline."
+    sentence_1 = f"{direction_word} {delta_str} ({pct_str}) vs its 28-day baseline."
 
-    if top_segment_info:
-        top_name = f"{top_segment_info['dimension']}: {top_segment_info['segment_value']}"
-        contrib_pct_val = round(abs(top_segment_info["contribution_pct"]) * 100)
-        sentence_2 = f"{top_name} accounted for {contrib_pct_val}% of the change."
-
-        # Check if other segments in this dimension also had significant shifts
-        other_segs = [s for s in dimension_segments if s["segment_value"] != top_segment_info["segment_value"]]
-        has_other_shifts = any(abs(s["delta"]) >= 0.5 * abs(top_segment_info["delta"]) for s in other_segs)
-
-        dim_label = top_segment_info["dimension"]
-        if has_other_shifts:
-            sentence_3 = f"Other {dim_label} segments also experienced significant shifts."
-        else:
-            sentence_3 = f"Other {dim_label} segments were within normal range."
-
-        return f"{sentence_1} {sentence_2} {sentence_3}"
-    else:
+    if not selected_dimension or not top_segment_info:
         return sentence_1
 
-async def train_and_persist_structural_importance(db: AsyncSession, metric_id: int) -> List[Dict[str, Any]]:
-    # 1. Check history guard (< 30 valid rollups)
-    count_stmt = select(func.count(DailyRollup.id)).where(
-        DailyRollup.metric_id == metric_id,
-        DailyRollup.dimension_values == {},
-        DailyRollup.trend.is_not(None)
-    )
-    res = await db.execute(count_stmt)
-    num_rollups = res.scalar() or 0
+    # Format top segment phrasing
+    top_name = f"{top_segment_info['dimension']}: {top_segment_info['segment_value']}"
+    top_abs_contrib = abs(top_segment_info["contribution_pct"]) * 100.0
+    top_contrib_str = f"{top_abs_contrib:.1f}%"
+    top_delta = top_segment_info["delta"]
+    top_is_same_direction = (top_delta > 0) == (total_delta > 0)
+    verb = "contributing" if top_is_same_direction else "offsetting"
 
-    if num_rollups < 30:
-        logger.info(f"Skipping CatBoost structural importance for metric {metric_id}: history ({num_rollups} days) < 30 days.")
-        metric_stmt = select(Metric).where(Metric.id == metric_id)
-        m_res = await db.execute(metric_stmt)
-        metric = m_res.scalars().first()
-        return metric.structural_importance if metric else []
+    # Multi-segment anomaly check
+    anomalous_segments = [s for s in dimension_segments if abs(s["contribution_pct"]) >= 0.15]
+    if len(anomalous_segments) > 1:
+        sentence_2 = f"{top_name} was the primary driver, {verb} {top_contrib_str} of the shift. Other {selected_dimension} segments also experienced significant shifts."
+    else:
+        sentence_2 = f"This was primarily driven by {top_name}, {verb} {top_contrib_str} of the shift."
+
+    return f"{sentence_1} {sentence_2}"
+
+
+async def train_and_persist_structural_importance(db: AsyncSession, metric_id: int) -> List[Dict[str, Any]]:
+    """
+    Trains CatBoostRegressor on raw observations to compute global structural feature importance.
+    Stores array of {feature: str, importance: float} on Metric.structural_importance.
+    """
+    # 1. Fetch metric
+    metric_stmt = select(Metric).where(Metric.id == metric_id)
+    m_res = await db.execute(metric_stmt)
+    metric = m_res.scalars().first()
+    if not metric:
+        return []
 
     # 2. Fetch raw observations
-    obs_stmt = select(Observation).where(Observation.metric_id == metric_id).order_by(Observation.date)
+    obs_stmt = select(Observation).where(Observation.metric_id == metric_id).order_by(Observation.date.asc())
     obs_res = await db.execute(obs_stmt)
     observations = obs_res.scalars().all()
 
-    if not observations:
-        return []
+    # Check 30-day minimum history guard
+    distinct_dates = {obs.date for obs in observations}
+    if len(distinct_dates) < 30:
+        logger.info(f"Skipping CatBoost structural importance for metric {metric_id}: history ({len(distinct_dates)} days) < 30 days.")
+        return metric.structural_importance or []
 
-    # 3. Build training DataFrame
-    dates = [pd.to_datetime(obs.date) for obs in observations]
-    min_date = min(dates)
-
+    # Prepare DataFrame for CatBoost
     records = []
+    min_date = min(distinct_dates)
     dimension_cols = set()
 
     for obs in observations:
-        d = pd.to_datetime(obs.date)
         row = {
-            "day_of_week": d.dayofweek,
-            "trend_index": (d - min_date).days,
-            "value": obs.value
+            "date": obs.date,
+            "day_of_week": obs.date.weekday(),
+            "trend_index": (obs.date - min_date).days,
+            "value": float(obs.value)
         }
         if obs.dimension_values:
             for k, v in obs.dimension_values.items():
@@ -267,50 +278,38 @@ async def train_and_persist_structural_importance(db: AsyncSession, metric_id: i
 
     if df["value"].nunique() <= 1:
         logger.info(f"Skipping CatBoost structural importance for metric {metric_id}: target values are constant.")
-        metric_stmt = select(Metric).where(Metric.id == metric_id)
-        m_res = await db.execute(metric_stmt)
-        metric = m_res.scalars().first()
-        return metric.structural_importance if metric else []
+        return metric.structural_importance or []
 
     try:
-        train_pool = Pool(
-            data=df[feature_cols],
-            label=df["value"],
-            cat_features=cat_cols
-        )
+        async with db.begin_nested():
+            train_pool = Pool(
+                data=df[feature_cols],
+                label=df["value"],
+                cat_features=cat_cols
+            )
 
-        model = CatBoostRegressor(iterations=300, verbose=False)
-        model.fit(train_pool)
+            model = CatBoostRegressor(iterations=300, verbose=False)
+            model.fit(train_pool)
 
-        imp_df = model.get_feature_importance(train_pool, type='PredictionValuesChange', prettified=True)
+            imp_df = model.get_feature_importance(train_pool, type='PredictionValuesChange', prettified=True)
 
-        structural_results = []
-        for _, row in imp_df.iterrows():
-            feat_name = str(row["Feature Id"])
-            imp_val = float(row["Importances"])
-            structural_results.append({
-                "feature": feat_name,
-                "importance": round(imp_val, 2)
-            })
+            structural_results = []
+            for _, row in imp_df.iterrows():
+                feat_name = str(row["Feature Id"])
+                imp_val = float(row["Importances"])
+                structural_results.append({
+                    "feature": feat_name,
+                    "importance": round(imp_val, 2)
+                })
 
-        # Save to Metric model
-        metric_stmt = select(Metric).where(Metric.id == metric_id)
-        m_res = await db.execute(metric_stmt)
-        metric = m_res.scalars().first()
-        if metric:
             metric.structural_importance = structural_results
-            await db.commit()
-
+        await db.commit()
         return structural_results
 
     except Exception as e:
         logger.error(f"CatBoost training failed for metric {metric_id}: {str(e)}", exc_info=True)
-        await db.rollback()
-        # Preserve existing metric.structural_importance
-        metric_stmt = select(Metric).where(Metric.id == metric_id)
-        m_res = await db.execute(metric_stmt)
-        metric = m_res.scalars().first()
-        return metric.structural_importance if metric else []
+        # Preserve existing metric.structural_importance on savepoint rollback
+        return metric.structural_importance or []
 
 async def generate_segment_comparison_spec(
     db: AsyncSession,

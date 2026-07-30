@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import Home from "../app/page";
+import Home from "../app/(dashboard)/dashboard/page";
 import * as api from "../app/api";
 
 // Mock the API client functions

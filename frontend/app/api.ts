@@ -63,10 +63,30 @@ export interface AnomalyDriversResponse {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+export interface VegaLiteSpec {
+  $schema?: string;
+  data?: Record<string, unknown>;
+  facet?: Record<string, unknown>;
+  spec?: Record<string, unknown>;
+  title?: string | Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+async function parseErrorDetail(res: Response, fallbackPrefix: string): Promise<Error> {
+  let detail = res.statusText;
+  try {
+    const errJson = await res.json();
+    if (errJson.detail) {
+      detail = typeof errJson.detail === 'string' ? errJson.detail : JSON.stringify(errJson.detail);
+    }
+  } catch {}
+  return new Error(`${fallbackPrefix}: ${detail}`);
+}
+
 export async function fetchMetrics(): Promise<Metric[]> {
   const res = await fetch(`${API_BASE_URL}/metrics`, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`Failed to fetch metrics: ${res.statusText}`);
+    throw await parseErrorDetail(res, 'Failed to fetch metrics');
   }
   return res.json();
 }
@@ -77,7 +97,7 @@ export async function fetchTimeseries(metricId: number, segment?: string): Promi
     : `${API_BASE_URL}/metrics/${metricId}/timeseries`;
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`Failed to fetch timeseries for metric ${metricId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to fetch timeseries for metric ${metricId}`);
   }
   return res.json();
 }
@@ -85,7 +105,7 @@ export async function fetchTimeseries(metricId: number, segment?: string): Promi
 export async function fetchAnomalies(metricId: number): Promise<Anomaly[]> {
   const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/anomalies`, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`Failed to fetch anomalies for metric ${metricId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to fetch anomalies for metric ${metricId}`);
   }
   return res.json();
 }
@@ -93,7 +113,7 @@ export async function fetchAnomalies(metricId: number): Promise<Anomaly[]> {
 export async function fetchAnomalyDetail(anomalyId: number): Promise<Anomaly> {
   const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}`, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`Failed to fetch anomaly detail for anomaly ${anomalyId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to fetch anomaly detail for anomaly ${anomalyId}`);
   }
   return res.json();
 }
@@ -101,7 +121,7 @@ export async function fetchAnomalyDetail(anomalyId: number): Promise<Anomaly> {
 export async function fetchAnomalyDrivers(anomalyId: number): Promise<AnomalyDriversResponse> {
   const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}/drivers`, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`Failed to fetch drivers for anomaly ${anomalyId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to fetch drivers for anomaly ${anomalyId}`);
   }
   return res.json();
 }
@@ -116,7 +136,7 @@ export async function submitAnomalyFeedback(
     body: JSON.stringify({ status }),
   });
   if (!res.ok) {
-    throw new Error(`Failed to submit feedback for anomaly ${anomalyId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to submit feedback for anomaly ${anomalyId}`);
   }
   return res.json();
 }
@@ -174,7 +194,7 @@ export async function fetchForecast(
   const url = `${API_BASE_URL}/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}`;
   const res = await fetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
-    throw new Error(`Failed to fetch forecast for metric ${metricId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to fetch forecast for metric ${metricId}`);
   }
   return res.json();
 }
@@ -188,7 +208,7 @@ export async function fetchAccuracy(
   const url = `${API_BASE_URL}/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}`;
   const res = await fetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
-    throw new Error(`Failed to fetch forecast accuracy for metric ${metricId}: ${res.statusText}`);
+    throw await parseErrorDetail(res, `Failed to fetch forecast accuracy for metric ${metricId}`);
   }
   return res.json();
 }
@@ -200,7 +220,7 @@ export async function fetchSegmentComparison(
   startDate?: string,
   endDate?: string,
   signal?: AbortSignal
-): Promise<any> {
+): Promise<VegaLiteSpec> {
   const params = new URLSearchParams();
   if (dimension) params.set('dimension', dimension);
   if (range) params.set('range', range);
@@ -210,12 +230,7 @@ export async function fetchSegmentComparison(
   const url = `${API_BASE_URL}/metrics/${metricId}/segment-comparison?${params.toString()}`;
   const res = await fetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const errJson = await res.json();
-      if (errJson.detail) detail = errJson.detail;
-    } catch {}
-    throw new Error(detail);
+    throw await parseErrorDetail(res, `Failed to fetch segment comparison for metric ${metricId}`);
   }
   return res.json();
 }
@@ -243,11 +258,98 @@ export async function fetchGlobalAnomalies(
   const url = `${API_BASE_URL}/anomalies?${params.toString()}`;
   const res = await fetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
-    throw new Error(`Failed to fetch global anomalies log: ${res.statusText}`);
+    throw await parseErrorDetail(res, 'Failed to fetch global anomalies log');
   }
   return res.json();
 }
 
+export interface MetricCreateSchema {
+  workspace_id?: number;
+  name: string;
+  unit: string | null;
+  direction_good: 'up_is_good' | 'down_is_good';
+  sensitivity: 'low' | 'medium' | 'high';
+  grain: 'daily' | 'weekly';
+}
 
+export interface ValidationErrorSchema {
+  row_number: number;
+  column: string;
+  issue: string;
+  invalid_value: string | null;
+}
 
+export interface ColumnMappingSchema {
+  date_col: string;
+  value_col: string;
+  dimension_cols: string[];
+}
+
+export interface ValidationReportSchema {
+  is_valid: boolean;
+  total_rows: number;
+  errors: ValidationErrorSchema[];
+  date_gaps: string[];
+  inferred_mapping: ColumnMappingSchema;
+}
+
+export interface InspectionResponseSchema {
+  metric_id: number;
+  inferred_mapping: ColumnMappingSchema;
+  validation_report: ValidationReportSchema;
+  rows: Record<string, any>[];
+}
+
+export interface DataConfirmSchema {
+  date_col: string;
+  value_col: string;
+  dimension_cols: string[];
+  rows: Record<string, any>[];
+  replace?: boolean;
+}
+
+export interface DataConfirmResponseSchema {
+  metric_id: number;
+  inserted_count: number;
+  updated_count: number;
+  total_observations: number;
+}
+
+export async function createMetric(payload: MetricCreateSchema): Promise<Metric> {
+  const res = await fetch(`${API_BASE_URL}/metrics`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, 'Failed to create metric');
+  }
+  return res.json();
+}
+
+export async function inspectCsvData(metricId: number, file: File): Promise<InspectionResponseSchema> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/data`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to inspect CSV data for metric ${metricId}`);
+  }
+  return res.json();
+}
+
+export async function confirmCsvData(metricId: number, payload: DataConfirmSchema): Promise<DataConfirmResponseSchema> {
+  const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/data/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to confirm CSV data for metric ${metricId}`);
+  }
+  return res.json();
+}
 

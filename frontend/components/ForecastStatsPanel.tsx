@@ -2,6 +2,7 @@
 
 import React from "react";
 import { AccuracyResponse } from "../app/api";
+import CountUp from "./CountUp";
 
 interface ForecastStatsPanelProps {
   accuracy: AccuracyResponse | null;
@@ -14,15 +15,13 @@ export default function ForecastStatsPanel({
   modelVersion,
   backend,
 }: ForecastStatsPanelProps) {
-  const mapeText = accuracy?.mape !== null && accuracy?.mape !== undefined
-    ? `${(accuracy.mape * 100).toFixed(2)}%`
-    : "N/A (Cold start)";
+  const mapeVal = accuracy?.mape != null ? accuracy.mape * 100 : null;
+  const hasMape = mapeVal !== null;
 
-  const coverageText = accuracy?.coverage_pct !== null && accuracy?.coverage_pct !== undefined
-    ? `${(accuracy.coverage_pct * 100).toFixed(1)}%`
-    : "N/A";
+  const coverageVal = accuracy?.coverage_pct != null ? accuracy.coverage_pct * 100 : null;
+  const hasCoverage = coverageVal !== null;
 
-  const isCoverageWellCalibrated = accuracy?.coverage_pct !== null && accuracy?.coverage_pct !== undefined
+  const isCoverageWellCalibrated = accuracy?.coverage_pct != null
     ? Math.abs(accuracy.coverage_pct - 0.8) <= 0.1
     : true;
 
@@ -32,12 +31,16 @@ export default function ForecastStatsPanel({
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
       {/* MAPE Card */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 shadow-lg">
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 shadow-lg transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
         <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
           12-Week MAPE
         </h4>
         <p className="text-3xl font-extrabold text-cyan-400">
-          {mapeText}
+          {mapeVal !== null ? (
+            <CountUp to={mapeVal} decimals={2} suffix="%" />
+          ) : (
+            "N/A (Cold start)"
+          )}
         </p>
         <p className="text-slate-500 text-[11px] font-semibold mt-1">
           Mean Absolute Percentage Error
@@ -45,7 +48,7 @@ export default function ForecastStatsPanel({
       </div>
 
       {/* Coverage Card */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 shadow-lg">
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 shadow-lg transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
         <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
           80% Interval Coverage
         </h4>
@@ -55,7 +58,11 @@ export default function ForecastStatsPanel({
               isCoverageWellCalibrated ? "text-purple-400" : "text-amber-400"
             }`}
           >
-            {coverageText}
+            {coverageVal !== null ? (
+              <CountUp to={coverageVal} decimals={1} suffix="%" />
+            ) : (
+              "N/A"
+            )}
           </p>
           <span className="text-xs font-bold text-slate-500">(Target: ~80%)</span>
         </div>
@@ -65,12 +72,12 @@ export default function ForecastStatsPanel({
       </div>
 
       {/* Evaluated Folds Card */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 shadow-lg">
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 shadow-lg transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
         <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
           Evaluated Folds
         </h4>
         <p className="text-3xl font-extrabold text-white">
-          {mlEvals}{" "}
+          <CountUp to={mlEvals} decimals={0} />{" "}
           <span className="text-slate-500 text-sm font-semibold">
             / {totalEvals} total
           </span>
@@ -81,7 +88,7 @@ export default function ForecastStatsPanel({
       </div>
 
       {/* Model Backend & Version Card */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 shadow-lg">
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 shadow-lg transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
         <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
           Model Engine
         </h4>

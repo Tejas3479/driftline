@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Set
 import pandas as pd
 import polars as pl
-from sqlalchemy import select, delete, text
+from sqlalchemy import select, delete, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Workspace
@@ -380,11 +380,11 @@ async def confirm_and_persist_observations(
     from src.anomalies.service import run_daily_rollup_and_decomposition
     await run_daily_rollup_and_decomposition(db, metric_id)
 
-    # Get total count
+    # Get total count via SQL aggregate
     total_obs_res = await db.execute(
-        select(Observation).where(Observation.metric_id == metric_id)
+        select(func.count()).select_from(Observation).where(Observation.metric_id == metric_id)
     )
-    total_obs = len(total_obs_res.scalars().all())
+    total_obs = total_obs_res.scalar_one()
 
     return {
         "metric_id": metric_id,

@@ -176,12 +176,12 @@ export default function SegmentBarChart({
               gridcolor: "#1e293b",
               zerolinecolor: "#334155",
               tickcolor: "#334155",
-              font: { color: "#94a3b8", size: 11 },
+              tickfont: { color: "#94a3b8", size: 11 },
             },
             yaxis: {
               gridcolor: "transparent",
               tickcolor: "#334155",
-              font: { color: "#cbd5e1", size: 12 },
+              tickfont: { color: "#cbd5e1", size: 12 },
             },
             hoverlabel: {
               bgcolor: "#0f172a",

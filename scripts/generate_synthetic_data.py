@@ -196,6 +196,8 @@ def generate_synthetic_dataset(seed: int = 42, inject_anomalies: bool = True) ->
 def main():
     parser = argparse.ArgumentParser(description="Generate synthetic SaaS daily MRR dataset with ground truth anomalies.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic generation (default: 42)")
+    parser.add_argument("--dirty", action="store_true", help="Inject unparseable dates and non-numeric values to test validation resilience")
+    parser.add_argument("--gaps", action="store_true", help="Drop random dates to create date gaps for missing data resilience testing")
     args = parser.parse_args()
 
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -210,8 +212,24 @@ def main():
 
     df, spec = generate_synthetic_dataset(seed=args.seed, inject_anomalies=True)
 
+    if args.gaps:
+        rng = np.random.default_rng(args.seed)
+        drop_indices = rng.choice(df.index, size=15, replace=False)
+        df = df.drop(drop_indices).reset_index(drop=True)
+        print(f"[!] Injected 15 date gaps into dataset.")
+
+    if args.dirty:
+        rng = np.random.default_rng(args.seed)
+        dirty_indices = rng.choice(df.index, size=10, replace=False)
+        for i, idx in enumerate(dirty_indices):
+            if i % 2 == 0:
+                df.at[idx, "date"] = "INVALID_DATE_STR"
+            else:
+                df.at[idx, "mrr"] = "CORRUPTED"
+        print(f"[!] Injected 10 dirty rows (invalid dates & corrupted numbers).")
+
     # Save canonical CSV
-    df.to_csv(csv_path, index=False, float_format="%.2f")
+    df.to_csv(csv_path, index=False)
     print(f"[+] Canonical synthetic CSV generated at: {csv_path} ({len(df)} rows)")
 
     # Save canonical ground truth JSON

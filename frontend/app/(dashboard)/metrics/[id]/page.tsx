@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp, LayoutGrid } from "lucide-react";
-import { fetchMetrics, fetchTimeseries, fetchAnomalies, Metric, TimeseriesPoint, Anomaly } from "../../api";
+import { fetchMetrics, fetchTimeseries, fetchAnomalies, Metric, TimeseriesPoint, Anomaly } from "@/app/api";
+import ScrollReveal from "@/components/ScrollReveal";
 
 
 // Dynamically import Plotly chart component to prevent SSR window issues
@@ -208,8 +209,9 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
         </div>
 
         {/* Key Metrics Cards */}
+        <ScrollReveal direction="up" staggerChildren stagger={0.08}>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/10 p-5">
+          <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
             <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
               Highest Value
             </h4>
@@ -217,7 +219,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
               {maxVal.toLocaleString()} <span className="text-slate-500 text-sm font-semibold">{metric.unit || ""}</span>
             </p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/10 p-5">
+          <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
             <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
               Lowest Value
             </h4>
@@ -225,7 +227,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
               {minVal.toLocaleString()} <span className="text-slate-500 text-sm font-semibold">{metric.unit || ""}</span>
             </p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/10 p-5">
+          <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
             <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
               Average Value
             </h4>
@@ -233,7 +235,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
               {avgVal.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-slate-500 text-sm font-semibold">{metric.unit || ""}</span>
             </p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/10 p-5">
+          <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 backdrop-blur-sm p-5 transition-all duration-300 hover:border-cyan-500/30 hover:shadow-glow-cyan-sm">
             <h4 className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">
               Anomaly Count
             </h4>
@@ -245,8 +247,10 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
             </p>
           </div>
         </div>
+        </ScrollReveal>
 
         {/* Plotly Chart Visualization Container */}
+        <ScrollReveal direction="up" delay={0.15}>
         <div className="mb-12">
           <MetricChart
             points={filteredPoints}
@@ -256,9 +260,11 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
             unit={metric.unit}
           />
         </div>
+        </ScrollReveal>
 
         {/* Anomalies Table / List in this range */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-6 shadow-2xl">
+        <ScrollReveal direction="up" delay={0.25}>
+        <div className="glass-card-lg rounded-xl p-6 shadow-2xl">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-extrabold tracking-tight text-slate-100 flex items-center gap-2">
               <ShieldAlert className="h-5 w-5 text-amber-500" />
@@ -332,6 +338,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
             </div>
           )}
         </div>
+        </ScrollReveal>
       </div>
     </main>
   );

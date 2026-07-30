@@ -13,9 +13,10 @@ import {
   TimeseriesPoint,
   ForecastResult,
   AccuracyResponse,
-} from "../../../api";
+} from "@/app/api";
 import LowConfidenceBanner from "@/components/LowConfidenceBanner";
 import ForecastStatsPanel from "@/components/ForecastStatsPanel";
+import ScrollReveal from "@/components/ScrollReveal";
 
 // Dynamically import Plotly chart components to prevent SSR window issues
 const MetricChart = dynamic(() => import("@/components/MetricChart"), {
@@ -240,43 +241,49 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
         {forecastResult?.low_confidence && <LowConfidenceBanner />}
 
         {/* Model Accuracy Track Record Stats Panel */}
-        <ForecastStatsPanel
-          accuracy={accuracyResponse}
-          modelVersion={forecastResult?.model_version || null}
-          backend={backend}
-        />
+        <ScrollReveal direction="up">
+          <ForecastStatsPanel
+            accuracy={accuracyResponse}
+            modelVersion={forecastResult?.model_version || null}
+            backend={backend}
+          />
+        </ScrollReveal>
 
         {/* Main Extended Timeseries & Forecast Chart */}
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-lg font-bold text-slate-100">
-              Historical Timeseries & {horizon}-Day Quantile Forecast
-            </h2>
-            <span className="text-xs text-slate-400 font-semibold">
-              p10 (10%), p50 (median), p90 (90%) bounds
-            </span>
+        <ScrollReveal direction="up" delay={0.2}>
+          <div className="mb-10 glass-card-lg p-4 rounded-xl bg-slate-900/40 backdrop-blur-sm border border-slate-800">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h2 className="text-lg font-bold text-slate-100">
+                Historical Timeseries & {horizon}-Day Quantile Forecast
+              </h2>
+              <span className="text-xs text-slate-400 font-semibold">
+                p10 (10%), p50 (median), p90 (90%) bounds
+              </span>
+            </div>
+            <MetricChart
+              points={timeseriesData.points}
+              anomalies={[]}
+              mad={timeseriesData.mad}
+              metricName={metric.name}
+              unit={metric.unit}
+              forecastPoints={forecastResult?.forecasts}
+            />
           </div>
-          <MetricChart
-            points={timeseriesData.points}
-            anomalies={[]}
-            mad={timeseriesData.mad}
-            metricName={metric.name}
-            unit={metric.unit}
-            forecastPoints={forecastResult?.forecasts}
-          />
-        </div>
+        </ScrollReveal>
 
         {/* Separate Forecast vs Actual Track Record Chart */}
-        <div className="mb-12">
-          <ForecastVsActualChart
-            points={accuracyResponse?.points || []}
-            metricName={metric.name}
-            unit={metric.unit}
-          />
-        </div>
+        <ScrollReveal direction="up" delay={0.15}>
+          <div className="mb-12 glass-card-lg p-4 rounded-xl bg-slate-900/40 backdrop-blur-sm border border-slate-800">
+            <ForecastVsActualChart
+              points={accuracyResponse?.points || []}
+              metricName={metric.name}
+              unit={metric.unit}
+            />
+          </div>
+        </ScrollReveal>
 
         {/* Evaluation Log Table */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-6 shadow-2xl">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm p-6 shadow-2xl hover:shadow-glow-cyan-sm transition-all duration-300">
           <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
             <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
               <Info className="h-5 w-5 text-cyan-400" />
@@ -316,7 +323,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
                         : "--";
 
                       return (
-                        <tr key={idx} className="text-slate-300 hover:bg-slate-900/40 transition">
+                        <tr key={idx} className="text-slate-300 hover:bg-slate-900/40 hover:shadow-glow-indigo-sm transition">
                           <td className="py-3 pr-4 font-semibold font-mono">{pt.date}</td>
                           <td className="py-3 px-4 font-mono">
                             {pt.predicted_p50.toLocaleString(undefined, { maximumFractionDigits: 2 })}

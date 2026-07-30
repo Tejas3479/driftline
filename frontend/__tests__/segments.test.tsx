@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import SegmentComparisonPage from "../app/metrics/[id]/segments/page";
+import SegmentComparisonPage from "../app/(dashboard)/metrics/[id]/segments/page";
 import SegmentComparisonChart from "../components/SegmentComparisonChart";
 import * as api from "../app/api";
 

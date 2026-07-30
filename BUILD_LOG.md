@@ -177,9 +177,45 @@
   | `interval_coverage` ($p_{10}\dots p_{90}$) | 92.86% | $60.0\%\dots 95.0\%$ calibration | PASS |
 - **Project Status**: Complete. All 49 backend pytest unit & integration tests and 14 frontend vitest tests passing cleanly.
 
+## Session 20: Codebase Deep-Dive Audit & HackForge Repairs
+- Performed exhaustive line-by-line inspection of all files across root, `src/`, `frontend/`, `tests/`, `scripts/`, and `alembic/`.
+- Implemented `AnomalyDriver` database persistence in `src/drivers/service.py` to ensure complete DB output persistence complying with `.agents/AGENTS.md`.
+- Refactored CatBoost structural importance training in `src/drivers/service.py` to use nested savepoints (`db.begin_nested()`) preventing session transaction aborts.
+- Optimized observation count in `src/ingestion/service.py` to use `select(func.count())` instead of in-memory object list loading; consolidated FastAPI router inclusions in `main.py` with `include_in_schema=False` to clean up OpenAPI docs.
+- Parallelized Next.js Overview dashboard data fetching (`app/page.tsx`) using `Promise.all`, added `VegaLiteSpec` interface and error detail helper in `api.ts`, added `--dirty` and `--gaps` CLI flags to `scripts/generate_synthetic_data.py`, added mobile menu drawer in `Navbar.tsx`, and added `test_date_gaps_decomposition_resilience` test in `tests/test_anomalies.py`.
+## Session 21: Framer Motion UI/UX Animations & Interactions
+- Integrated `framer-motion` (v12.42) into Next.js App Router frontend for smooth micro-animations and UI state transitions.
+- Built `<PageTransition>` wrapper component in `components/PageTransition.tsx` for route changes; added `motion.div` staggered entrance and hover-lift variants to Overview metric grid cards in `app/page.tsx`.
+- Added `layoutId="activeTabPill"` sliding tab indicators and `AnimatePresence` status badge morphing in `app/anomalies/page.tsx` and `components/FeedbackControl.tsx`; created `CountUp.tsx` component for animated KPI statistics counters in `components/ForecastStatsPanel.tsx`.
+- Decisions & Verification: Preserved all component props and API interfaces. Verified cleanly with 14/14 frontend Vitest tests and 52/52 backend pytest tests passing.
 
+## Session 14: Premium UI Transformation & Cinematic Landing Page
+- Built 12 reusable animation components: SmoothScroll (Lenis), ScrollReveal (GSAP), TextReveal, TypewriterText, AnimatedCounter, AtroposCard (3D tilt), CustomCursor (dot+ring), GlowButton, MeteorShower, GrainOverlay, UISoundEngine (Web Audio API), upgraded PageTransition (spring+blur).
+- Created cinematic 7-section landing page: hero with animated mesh gradient + floating orbs + meteor shower + typewriter cycling headline + trust metric pills, tech trust strip, feature bento grid (6 cards), 3-step "how it works" timeline, performance stats with animated counters, open-source CTA, minimal footer.
+- Restructured routes into `(landing)` and `(dashboard)` route groups: `/` → landing, `/dashboard` → overview. Simplified root layout to minimal HTML shell, created per-group layouts with appropriate providers.
+- Expanded design system: 25+ Tailwind tokens (surface colors, accent palette, glow shadows), 8 custom animations (float, grain, meteor, pulse-glow, border-spin), glassmorphism layers (glass-card-sm/lg), mesh gradient backgrounds, CSS `@property` animated border.
+- Polished all dashboard pages: glass-card containers, ScrollReveal wrapping, hover glow effects, backdrop-blur, upgraded stat card styling across overview, anomaly log, anomaly detail, metric detail, forecast, and settings pages. Upgraded all chart containers (MetricChart, ForecastVsActualChart, SegmentBarChart, SegmentComparisonChart) to glass frames.
+- Created mobile hooks: useDeviceOrientation (gyro tilt), useHaptics (vibration patterns).
+- Fixed 4 pre-existing build errors: vega-canvas webpack fallback, ForecastStatsPanel TS narrowing, Plotly font→tickfont axis type, Plotly Dash type assertion.
+- Decisions: Used Web Audio API directly instead of Tone.js for lighter procedural UI audio; kept all data fetching and business logic completely untouched.
+- Next session context: Full build passing (`npm run build` green, 9 routes). Next priorities: integrate CustomCursor + UISoundEngine into layouts, add Lenis smooth scrolling, create remaining mobile integrations, and visual QA in the browser.
 
+## Session 22: Complete Premium Transformation & Visual Overhaul Integration
+- Completed Driftline visual transformation: integrated custom cursor with magnetic snap (`CustomCursor`), Atropos 3D parallax tilt (`AtroposCard`), CSS `@property` animated gradient borders, SVG `feTurbulence` film grain overlay (`FilmGrain`), typewriter text effect (`TypewriterText`), and CSS `@starting-style` entry animations.
+- Upgraded interactive UI components: replaced native selects with accessible glassmorphic `CustomSelect` across anomalies and settings, integrated `UISoundEngine` for interactive audio feedback, and added interactive demo & walkthrough to landing page.
+- Decisions & Verification: Maintained zero functional/data changes and zero backend/API modifications. Ensured test accessibility for custom UI components (hidden combobox in CustomSelect, exact string formats in overview metrics). Verified with 14/14 frontend Vitest tests and 52/52 backend pytest tests passing.
+- Next session context: All unit tests and Next.js production build (`npm run build`) pass cleanly. Next step is visual QA in browser or user evaluation.
 
+## Session 23: Exhaustive Codebase Audit & Product-Readiness Verification
+- Conducted full architectural, ML pipeline, database schema, and full-stack integration audit of Driftline against 2026 internet best practices.
+- Confirmed all 52 backend pytest tests pass (`52 passed in 345.40s`) and verified mathematical invariants across STL decomposition, MAD Z-score residuals, waterfall bridge attribution, CatBoost structural importance, and LightGBM quantile regression.
+- Identified critical "headless" UI disconnect: Data Ingestion (`POST /metrics/{id}/data`), Executive PDF Digests (`GET /digests`), and Alert Notifications (`GET /notifications`) are fully implemented and tested in the backend but 100% orphaned from the frontend.
+- Recommended immediate next step: extend `frontend/app/api.ts` with ingestion/digest/alert client wrappers and build `<DataUploadModal />` to complete the self-service user journey.
 
-
-
+## Session 24: Data Ingestion UI Implementation
+- Built the complete frontend Data Ingestion & CSV Upload flow identified as missing in the Session 23 audit.
+- Extended `frontend/app/api.ts` with `MetricCreateSchema`, `ValidationReportSchema`, `ColumnMappingSchema`, `InspectionResponseSchema`, `DataConfirmSchema`, and fully-typed `fetch` wrappers.
+- Implemented `DataUploadModal.tsx`, a 3-step `framer-motion` glassmorphic wizard (Configuration $\rightarrow$ Upload $\rightarrow$ Validation & Review) that posts `FormData` to the backend and displays the returned Polars validation report (errors, date gaps, inferred columns) before confirming ingestion.
+- Integrated the modal into `Navbar.tsx` (`+ Add Metric`) and the Dashboard Empty State (`Upload your first metric`).
+- Verified zero TypeScript compilation errors.
+- Next session context: The primary headless onboarding flow is complete. Ready for next priorities: offloading CPU-heavy ML ops to thread pools, or JWT authentication.

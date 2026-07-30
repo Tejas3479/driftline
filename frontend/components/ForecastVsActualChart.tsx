@@ -127,7 +127,7 @@ export default function ForecastVsActualChart({
   }
 
   return (
-    <div className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-xl">
+    <div className="w-full glass-card-lg rounded-xl p-4 shadow-xl">
       <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-2 px-2">
         <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
           Forecast vs. Actual Track Record (Walk-Forward Backtest)
@@ -148,14 +148,14 @@ export default function ForecastVsActualChart({
             gridcolor: "#1e293b",
             zerolinecolor: "#334155",
             tickcolor: "#334155",
-            font: { color: "#94a3b8", size: 11 },
+            tickfont: { color: "#94a3b8", size: 11 },
             type: "date",
           },
           yaxis: {
             gridcolor: "#1e293b",
             zerolinecolor: "#334155",
             tickcolor: "#334155",
-            font: { color: "#94a3b8", size: 11 },
+            tickfont: { color: "#94a3b8", size: 11 },
             title: unit ? { text: unit, font: { color: "#94a3b8", size: 11 } } : undefined,
           },
           legend: {

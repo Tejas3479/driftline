@@ -243,13 +243,13 @@ export default function MetricChart({
       line: {
         color: hexToRgba(color, opacity),
         width: 1.5,
-        dash: "dash",
+        dash: "dash" as const,
       },
     };
   });
 
   return (
-    <div className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800 shadow-2xl">
+    <div className="w-full glass-card-lg rounded-xl p-4 shadow-2xl">
       <Plot
         data={data}
         layout={{
@@ -262,14 +262,14 @@ export default function MetricChart({
             gridcolor: "#1e293b",
             zerolinecolor: "#334155",
             tickcolor: "#334155",
-            font: { color: "#94a3b8" },
+            tickfont: { color: "#94a3b8" },
             type: "date",
           },
           yaxis: {
             gridcolor: "#1e293b",
             zerolinecolor: "#334155",
             tickcolor: "#334155",
-            font: { color: "#94a3b8" },
+            tickfont: { color: "#94a3b8" },
             title: unit ? { text: unit, font: { color: "#94a3b8", size: 12 } } : undefined,
           },
           legend: {

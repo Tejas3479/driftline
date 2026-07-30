@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import ForecastPage from "../app/metrics/[id]/forecast/page";
+import ForecastPage from "../app/(dashboard)/metrics/[id]/forecast/page";
 import * as api from "../app/api";
 
 // Mock the API client functions

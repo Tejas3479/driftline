@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ShieldAlert,
   Search,
@@ -16,7 +17,9 @@ import {
   HelpCircle,
   SlidersHorizontal,
 } from "lucide-react";
-import { fetchGlobalAnomalies, GlobalAnomaly } from "../api";
+import { fetchGlobalAnomalies, GlobalAnomaly } from "@/app/api";
+import ScrollReveal from "@/components/ScrollReveal";
+import CustomSelect from "@/components/CustomSelect";
 
 type StatusTab = "all" | "new" | "reviewed" | "resolved" | "false_positive";
 type SortOption = "date_desc" | "date_asc" | "severity_desc" | "severity_asc";
@@ -192,15 +195,15 @@ export default function GlobalAnomalyLogPage() {
           </div>
 
           {/* Quick Stats Pill */}
-          <div className="flex items-center gap-4 bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-md">
+          <div className="flex items-center gap-6 bg-slate-900/60 border border-slate-800/80 p-4 px-6 rounded-2xl glass-panel shadow-xl">
             <div>
-              <div className="text-xs text-slate-400 font-bold uppercase">Total Listed</div>
-              <div className="text-2xl font-extrabold text-white">{filteredAndSortedAnomalies.length}</div>
+              <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Total Listed</div>
+              <div className="text-2xl font-extrabold font-mono text-white">{filteredAndSortedAnomalies.length}</div>
             </div>
             <div className="h-8 w-px bg-slate-800" />
             <div>
-              <div className="text-xs text-amber-400 font-bold uppercase">Requires Action</div>
-              <div className="text-2xl font-extrabold text-amber-400">
+              <div className="text-[10px] text-amber-400 font-extrabold uppercase tracking-wider">Requires Action</div>
+              <div className="text-2xl font-extrabold font-mono text-amber-400">
                 {anomalies.filter((a) => a.status.toLowerCase() === "new").length}
               </div>
             </div>
@@ -210,7 +213,7 @@ export default function GlobalAnomalyLogPage() {
         {/* Filter Tabs & Search Bar Controls */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-8">
           {/* Status Tabs */}
-          <div className="flex items-center bg-slate-900 p-1.5 rounded-xl border border-slate-800 overflow-x-auto">
+          <div className="flex items-center bg-slate-900 p-1.5 rounded-xl border border-slate-800 overflow-x-auto relative">
             {(
               [
                 { id: "all", label: "All Statuses" },
@@ -219,19 +222,27 @@ export default function GlobalAnomalyLogPage() {
                 { id: "resolved", label: "Resolved" },
                 { id: "false_positive", label: "False Positive" },
               ] as { id: StatusTab; label: string }[]
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? "bg-cyan-500 text-slate-950 shadow-md"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            ).map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`relative px-4 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+                    isActive ? "text-slate-950" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeTabPill"
+                      className="absolute inset-0 bg-cyan-500 rounded-lg shadow-md"
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Search & Sort Controls */}
@@ -244,24 +255,26 @@ export default function GlobalAnomalyLogPage() {
                 placeholder="Search by metric or explanation..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl bg-slate-900 border border-slate-800 pl-9 pr-4 py-2 text-xs font-medium text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                className="w-full rounded-xl bg-slate-900 border border-slate-800 pl-9 pr-4 py-2 text-xs font-medium text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:shadow-glow-cyan-sm"
               />
             </div>
 
             {/* Sort Selector */}
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl text-xs font-medium">
+            <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-slate-400">Sort:</span>
-              <select
+              <span className="text-slate-400 text-xs">Sort:</span>
+              <CustomSelect
+                options={[
+                  { value: "date_desc", label: "Date (Newest First)" },
+                  { value: "date_asc", label: "Date (Oldest First)" },
+                  { value: "severity_desc", label: "Severity (High to Low)" },
+                  { value: "severity_asc", label: "Severity (Low to High)" },
+                ]}
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
-                className="bg-transparent text-slate-200 font-bold focus:outline-none cursor-pointer"
-              >
-                <option value="date_desc" className="bg-slate-900">Date (Newest First)</option>
-                <option value="date_asc" className="bg-slate-900">Date (Oldest First)</option>
-                <option value="severity_desc" className="bg-slate-900">Severity (High to Low)</option>
-                <option value="severity_asc" className="bg-slate-900">Severity (Low to High)</option>
-              </select>
+                onChange={(val) => setSortBy(val as SortOption)}
+                placeholder="Sort anomalies..."
+                className="min-w-[190px]"
+              />
             </div>
           </div>
         </div>
@@ -284,53 +297,55 @@ export default function GlobalAnomalyLogPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 shadow-2xl">
-            <table className="w-full text-left text-sm text-slate-300">
-              <thead className="bg-slate-900 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
-                <tr>
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Metric</th>
-                  <th className="px-6 py-4">Type</th>
-                  <th className="px-6 py-4">Severity</th>
-                  <th className="px-6 py-4">Explanation Excerpt</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-medium">
-                {filteredAndSortedAnomalies.map((anom) => (
-                  <tr key={anom.id} className="hover:bg-slate-800/40 transition">
-                    <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-slate-200">
-                      {anom.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-bold text-white">
-                      {anom.metric_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getTypeBadge(anom.anomaly_type)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getSeverityBadge(anom.severity_score)}
-                    </td>
-                    <td className="px-6 py-4 max-w-md truncate text-xs text-slate-400">
-                      {anom.explanation_excerpt || "No explanation text generated."}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(anom.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <Link
-                        href={`/anomalies/${anom.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 transition"
-                      >
-                        Investigate <ArrowUpRight className="h-3.5 w-3.5" />
-                      </Link>
-                    </td>
+          <ScrollReveal direction="up">
+            <div className="overflow-x-auto rounded-3xl border border-slate-800/80 glass-panel shadow-2xl">
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="bg-slate-900/90 text-xs font-extrabold uppercase tracking-wider text-slate-400 border-b border-slate-800/80">
+                  <tr>
+                    <th className="px-6 py-4">Date</th>
+                    <th className="px-6 py-4">Metric</th>
+                    <th className="px-6 py-4">Type</th>
+                    <th className="px-6 py-4">Severity</th>
+                    <th className="px-6 py-4">Explanation Excerpt</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-medium">
+                  {filteredAndSortedAnomalies.map((anom) => (
+                    <tr key={anom.id} className="hover:bg-slate-800/40 hover:shadow-lg hover:shadow-cyan-500/5 transition">
+                      <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-slate-200">
+                        {anom.date}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap font-bold text-white">
+                        {anom.metric_name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getTypeBadge(anom.anomaly_type)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getSeverityBadge(anom.severity_score)}
+                      </td>
+                      <td className="px-6 py-4 max-w-md truncate text-xs text-slate-400">
+                        {anom.explanation_excerpt || "No explanation text generated."}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(anom.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <Link
+                          href={`/anomalies/${anom.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-cyan-400 hover:text-cyan-300 transition"
+                        >
+                          Investigate <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ScrollReveal>
         )}
       </div>
     </main>

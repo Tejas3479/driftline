@@ -788,6 +788,52 @@ async def test_get_global_anomalies():
         assert new_res.status_code == 200
         assert all(a["status"] == "new" for a in new_res.json())
 
+@pytest.mark.asyncio
+async def test_date_gaps_decomposition_resilience():
+    """
+    Tests that time series decomposition and daily rollup logic gracefully handles date gaps in input data
+    by reindexing to a continuous calendar before running rolling decomposition calculations.
+    """
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/metrics", json={
+            "name": "Date Gaps Resilience Metric",
+            "direction_good": "up_is_good",
+            "sensitivity": "medium"
+        })
+        metric_id = metric_res.json()["id"]
+
+        # Generate 60 days with missing weekend dates (skipping days 15-18)
+        rows = []
+        start_d = date(2026, 1, 1)
+        for i in range(60):
+            if 15 <= i <= 18:
+                continue  # Intentional 4-day gap
+            d = start_d + timedelta(days=i)
+            val = 100.0 + (i % 7) * 2.0
+            rows.append({"date": d.isoformat(), "revenue": val, "channel": "organic"})
+
+        confirm_res = await client.post(f"/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date",
+            "value_col": "revenue",
+            "dimension_cols": ["channel"],
+            "rows": rows,
+            "replace": True
+        })
+        assert confirm_res.status_code == 200
+
+        # Verify continuous calendar rollups were created (60 continuous days, total group + 1 segment group = 120 rollups)
+        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
+        async with async_session() as session:
+            res = await session.execute(
+                select(DailyRollup).where(DailyRollup.metric_id == metric_id)
+            )
+            rollups = list(res.scalars().all())
+            assert len(rollups) == 120
+
+        await test_engine.dispose()
+
+
 
 
 

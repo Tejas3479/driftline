@@ -13,8 +13,10 @@ import {
   Sliders,
   Award,
 } from "lucide-react";
+import ScrollReveal from "@/components/ScrollReveal";
 import { useMetricContext } from "@/components/MetricContext";
-import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric } from "../api";
+import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric } from "@/app/api";
+import CustomSelect from "@/components/CustomSelect";
 
 export default function ModelHealthSettingsPage() {
   const { selectedMetricId, setSelectedMetricId, metrics, loading: metricsLoading } = useMetricContext();
@@ -106,21 +108,22 @@ export default function ModelHealthSettingsPage() {
           <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-lg">
             <Layers className="h-4 w-4 text-cyan-400" />
             <span className="text-xs font-bold text-slate-400 uppercase">Target Metric:</span>
-            <select
+            <CustomSelect
+              options={metrics.map((m) => ({
+                value: m.id,
+                label: m.name,
+                badge: `#${m.id}`,
+              }))}
               value={currentMetric.id}
-              onChange={(e) => setSelectedMetricId(parseInt(e.target.value, 10))}
-              className="bg-slate-950 border border-slate-800 text-slate-100 text-xs font-bold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
-            >
-              {metrics.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} (#{m.id})
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedMetricId(parseInt(String(val), 10))}
+              placeholder="Select Metric..."
+              className="min-w-[200px]"
+            />
           </div>
         </div>
 
         {/* System Telemetry & Configuration Grid */}
+        <ScrollReveal direction="up" staggerChildren stagger={0.1}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           {/* Column 1: Model Health Telemetry Cards */}
           <div className="lg:col-span-2 space-y-6">
@@ -139,7 +142,7 @@ export default function ModelHealthSettingsPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 12-Week MAPE Card */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl hover:border-cyan-500/30 hover:shadow-glow-cyan-sm transition-all">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
                     <span>12-Week Backtest MAPE</span>
                     <Award className="h-4 w-4 text-cyan-400" />
@@ -155,7 +158,7 @@ export default function ModelHealthSettingsPage() {
                 </div>
 
                 {/* Interval Coverage Card */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl hover:border-cyan-500/30 hover:shadow-glow-cyan-sm transition-all">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
                     <span>80% Interval Coverage</span>
                     <Zap className="h-4 w-4 text-purple-400" />
@@ -171,7 +174,7 @@ export default function ModelHealthSettingsPage() {
                 </div>
 
                 {/* Evaluated Folds Card */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl hover:border-cyan-500/30 hover:shadow-glow-cyan-sm transition-all">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
                     <span>Backtest Evaluated Folds</span>
                     <Layers className="h-4 w-4 text-blue-400" />
@@ -185,7 +188,7 @@ export default function ModelHealthSettingsPage() {
                 </div>
 
                 {/* Forecast Baseline Date */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl hover:border-cyan-500/30 hover:shadow-glow-cyan-sm transition-all">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase mb-2">
                     <span>Forecast Baseline Date</span>
                     <Calendar className="h-4 w-4 text-emerald-400" />
@@ -201,7 +204,7 @@ export default function ModelHealthSettingsPage() {
             )}
 
             {/* Model Architecture & Backend Engine */}
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl hover:border-cyan-500/30 hover:shadow-glow-cyan-sm transition-all">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                 <Cpu className="h-4 w-4 text-purple-400" /> ML Pipeline Engine Specifications
               </h3>
@@ -220,11 +223,17 @@ export default function ModelHealthSettingsPage() {
                 </div>
                 <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
                   <span className="text-slate-500 font-bold block mb-1">CONFIDENCE STATUS</span>
-                  <span className="font-extrabold text-emerald-400">
+                  <span className="font-extrabold text-emerald-400 flex items-center gap-2">
                     {forecast?.low_confidence ? (
-                      <span className="text-amber-400">Low Confidence (Cold)</span>
+                      <span className="text-amber-400 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        Low Confidence (Cold)
+                      </span>
                     ) : (
-                      "High Confidence (ML)"
+                      <>
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        High Confidence (ML)
+                      </>
                     )}
                   </span>
                 </div>
@@ -238,7 +247,7 @@ export default function ModelHealthSettingsPage() {
               <Sliders className="h-5 w-5 text-purple-400" /> Metric Configuration
             </h2>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl space-y-6">
+            <div className="rounded-xl border border-slate-800 bg-slate-900 p-6 shadow-xl hover:border-cyan-500/30 hover:shadow-glow-cyan-sm transition-all space-y-6">
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
                   Metric Name & ID
@@ -289,6 +298,7 @@ export default function ModelHealthSettingsPage() {
             </div>
           </div>
         </div>
+        </ScrollReveal>
       </div>
     </main>
   );

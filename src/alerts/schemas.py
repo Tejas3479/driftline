@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class ChannelEnum(str, Enum):
     in_app = "in_app"
@@ -13,15 +13,16 @@ class AlertRuleCreateSchema(BaseModel):
     channels: List[ChannelEnum] = Field(default_factory=lambda: [ChannelEnum.in_app, ChannelEnum.email])
 
 class AlertRuleResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     metric_id: int
     min_severity: float
     channels: List[str]
 
-    class Config:
-        from_attributes = True
-
 class NotificationResponseSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     workspace_id: int
     metric_id: int
@@ -31,6 +32,3 @@ class NotificationResponseSchema(BaseModel):
     severity_score: float
     is_read: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True

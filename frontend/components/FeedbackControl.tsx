@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { ThumbsUp, ThumbsDown, CheckCircle2, AlertOctagon } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { submitAnomalyFeedback, Anomaly } from "../app/api";
 
 interface FeedbackControlProps {
@@ -44,7 +45,7 @@ export default function FeedbackControl({
   const isReviewed = status === 'reviewed' || status === 'resolved';
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg">
+    <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg">
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300">
           {isFalsePositive ? (
@@ -60,7 +61,12 @@ export default function FeedbackControl({
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Anomaly Status
             </span>
-            <span
+            <motion.span
+              layout
+              key={status}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2 }}
               className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
                 isFalsePositive
                   ? "bg-rose-950 text-rose-300 border border-rose-800"
@@ -70,7 +76,7 @@ export default function FeedbackControl({
               }`}
             >
               {status.toUpperCase().replace("_", " ")}
-            </span>
+            </motion.span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             Was this anomaly detection accurate and useful?
@@ -80,7 +86,8 @@ export default function FeedbackControl({
 
       <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => handleFeedback('reviewed')}
             disabled={submitting}
             className={`flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition duration-200 ${
@@ -91,9 +98,10 @@ export default function FeedbackControl({
           >
             <ThumbsUp className="h-4 w-4" />
             <span>Confirm Anomaly</span>
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => handleFeedback('false_positive')}
             disabled={submitting}
             className={`flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition duration-200 ${
@@ -104,14 +112,22 @@ export default function FeedbackControl({
           >
             <ThumbsDown className="h-4 w-4" />
             <span>False Positive</span>
-          </button>
+          </motion.button>
         </div>
 
-        {feedbackMsg && (
-          <span className="text-[11px] font-semibold text-cyan-400 animate-fade-in">
-            {feedbackMsg}
-          </span>
-        )}
+        <AnimatePresence>
+          {feedbackMsg && (
+            <motion.span
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2 }}
+              className="text-[11px] font-semibold text-cyan-400"
+            >
+              {feedbackMsg}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

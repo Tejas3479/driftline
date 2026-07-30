@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import GlobalAnomalyLogPage from "../app/anomalies/page";
+import GlobalAnomalyLogPage from "../app/(dashboard)/anomalies/page";
 import * as api from "../app/api";
 
 // Mock API module

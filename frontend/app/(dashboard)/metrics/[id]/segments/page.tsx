@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, AlertTriangle, Activity, Info, LayoutGrid } from "lucide-react";
-import { fetchMetrics, fetchSegmentComparison, Metric } from "../../../api";
+import { fetchMetrics, fetchSegmentComparison, Metric } from "@/app/api";
 
 // Dynamically import SegmentComparisonChart to prevent SSR window/DOM issues with vega-embed
 const SegmentComparisonChart = dynamic(() => import("@/components/SegmentComparisonChart"), {

@@ -1,16 +1,403 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS (CSS Custom Properties)
+   ═══════════════════════════════════════════════════════ */
 :root {
-  --background: #090d16;
-  --foreground: #f3f4f6;
+  --background: #030712;
+  --foreground: #f9fafb;
+
+  /* Surface depth layers */
+  --surface-0: #030712;
+  --surface-1: #0f172a;
+  --surface-2: #1e293b;
+  --surface-3: #334155;
+
+  /* Accent spectrum */
+  --accent-cyan: #22d3ee;
+  --accent-cyan-dim: #06b6d4;
+  --accent-indigo: #818cf8;
+  --accent-indigo-dim: #6366f1;
+  --accent-violet: #a78bfa;
+  --accent-violet-dim: #8b5cf6;
+
+  /* Status */
+  --status-warning: #f59e0b;
+  --status-danger: #f43f5e;
+  --status-success: #10b981;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--background);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
+  overflow-x: hidden;
+}
+
+/* Code & Numerical Monospace Font */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATED BACKGROUND SYSTEMS
+   ═══════════════════════════════════════════════════════ */
+
+/* Static Mesh Gradient (original, preserved) */
+.bg-mesh-pattern {
+  background-color: #030712;
+  background-image: 
+    radial-gradient(ellipse at 15% 10%, rgba(6, 182, 212, 0.08), transparent 45%),
+    radial-gradient(ellipse at 85% 20%, rgba(99, 102, 241, 0.08), transparent 45%),
+    radial-gradient(ellipse at 50% 80%, rgba(139, 92, 246, 0.06), transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Animated Mesh Gradient — slow-moving ambient blobs */
+.bg-mesh-animated {
+  background-color: #030712;
+  background-image:
+    radial-gradient(ellipse at 15% 10%, rgba(6, 182, 212, 0.12), transparent 50%),
+    radial-gradient(ellipse at 85% 20%, rgba(99, 102, 241, 0.10), transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(139, 92, 246, 0.08), transparent 55%);
+  background-size: 200% 200%;
+  background-attachment: fixed;
+  animation: gradient-shift 20s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  25% { background-position: 50% 0%; }
+  50% { background-position: 100% 50%; }
+  75% { background-position: 50% 100%; }
+}
+
+/* CSS-Only Particle Field — tiny floating dots via box-shadow */
+.particles-field {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.particles-field::before {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  top: 0;
+  left: 0;
+  box-shadow:
+    25vw 10vh 0 0 rgba(34, 211, 238, 0.15),
+    50vw 20vh 0 0 rgba(129, 140, 248, 0.12),
+    75vw 15vh 0 0 rgba(167, 139, 250, 0.10),
+    10vw 40vh 0 0 rgba(34, 211, 238, 0.08),
+    60vw 45vh 0 0 rgba(129, 140, 248, 0.10),
+    85vw 50vh 0 0 rgba(167, 139, 250, 0.12),
+    30vw 60vh 0 0 rgba(34, 211, 238, 0.10),
+    70vw 65vh 0 0 rgba(129, 140, 248, 0.08),
+    15vw 75vh 0 0 rgba(167, 139, 250, 0.10),
+    45vw 80vh 0 0 rgba(34, 211, 238, 0.12),
+    90vw 35vh 0 0 rgba(129, 140, 248, 0.06),
+    5vw 55vh 0 0 rgba(167, 139, 250, 0.08),
+    40vw 30vh 0 0 rgba(34, 211, 238, 0.06),
+    55vw 70vh 0 0 rgba(129, 140, 248, 0.10),
+    80vw 85vh 0 0 rgba(167, 139, 250, 0.08),
+    20vw 90vh 0 0 rgba(34, 211, 238, 0.10),
+    65vw 5vh 0 0 rgba(129, 140, 248, 0.06),
+    35vw 95vh 0 0 rgba(167, 139, 250, 0.12);
+  animation: float-particles 30s linear infinite;
+}
+
+@keyframes float-particles {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-100vh); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLASSMORPHISM CARD SYSTEM (Multi-depth)
+   ═══════════════════════════════════════════════════════ */
+
+/* Small Glass — subtle, for inline elements */
+.glass-card-sm {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(51, 65, 85, 0.4);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Standard Glass Card (existing, enhanced) */
+.glass-card {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(6, 182, 212, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(6, 182, 212, 0.15);
+}
+
+/* Large Glass — heavy blur, for prominent containers */
+.glass-card-lg {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-lg:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 20px 50px -15px rgba(6, 182, 212, 0.15);
+}
+
+/* Glassmorphism Panel (Static — no hover) */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+/* ═══════════════════════════════════════════════════════
+   CSS @property — ANIMATED GRADIENT BORDER
+   ═══════════════════════════════════════════════════════ */
+
+@property --border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Animated rotating gradient border effect */
+.animated-border {
+  position: relative;
+  isolation: isolate;
+}
+
+.animated-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    var(--accent-cyan),
+    var(--accent-indigo),
+    var(--accent-violet),
+    var(--accent-cyan)
+  );
+  animation: border-rotate 4s linear infinite;
+}
+
+.animated-border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    var(--accent-cyan),
+    var(--accent-indigo),
+    var(--accent-violet),
+    var(--accent-cyan)
+  );
+  filter: blur(12px);
+  opacity: 0.5;
+  animation: border-rotate 4s linear infinite;
+}
+
+@keyframes border-rotate {
+  to { --border-angle: 360deg; }
+}
+
+/* Glass Card Glow with Animated Border on Hover */
+.glass-card-glow {
+  position: relative;
+}
+.glass-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--border-angle),
+    rgba(6, 182, 212, 0.4),
+    rgba(99, 102, 241, 0.4),
+    rgba(168, 85, 247, 0.4),
+    rgba(6, 182, 212, 0.4)
+  );
+  filter: blur(10px);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  animation: border-rotate 6s linear infinite;
+}
+.glass-card-glow:hover::before {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GLOWING AMBIENT HALOS
+   ═══════════════════════════════════════════════════════ */
+.glow-cyan {
+  box-shadow: 0 0 25px -4px rgba(6, 182, 212, 0.25);
+}
+
+.glow-indigo {
+  box-shadow: 0 0 25px -4px rgba(99, 102, 241, 0.25);
+}
+
+.glow-violet {
+  box-shadow: 0 0 25px -4px rgba(139, 92, 246, 0.25);
+}
+
+.glow-amber {
+  box-shadow: 0 0 25px -4px rgba(245, 158, 11, 0.25);
+}
+
+.glow-rose {
+  box-shadow: 0 0 25px -4px rgba(244, 63, 94, 0.25);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TEXT GRADIENTS
+   ═══════════════════════════════════════════════════════ */
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #38bdf8 0%, #22d3ee 50%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-amber {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #fb7185 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-violet {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #c084fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-hero {
+  background: linear-gradient(135deg, #f9fafb 0%, #22d3ee 40%, #818cf8 70%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SHIMMER LOADING SKELETON
+   ═══════════════════════════════════════════════════════ */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.4) 25%,
+    rgba(30, 41, 59, 0.6) 50%,
+    rgba(15, 23, 42, 0.4) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   METEOR / SHOOTING STAR EFFECT
+   ═══════════════════════════════════════════════════════ */
+.meteor {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 80px;
+  background: linear-gradient(
+    to bottom,
+    rgba(34, 211, 238, 0),
+    rgba(34, 211, 238, 0.6),
+    rgba(34, 211, 238, 0)
+  );
+  border-radius: 999px;
+  transform: rotate(215deg);
+  animation: meteor-fall var(--meteor-speed, 3s) linear var(--meteor-delay, 0s) infinite;
+}
+
+@keyframes meteor-fall {
+  0% {
+    transform: rotate(215deg) translateX(0);
+    opacity: 1;
+  }
+  70% { opacity: 1; }
+  100% {
+    transform: rotate(215deg) translateX(-600px);
+    opacity: 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   FOCUS RING (Accessible Focus Indicators)
+   ═══════════════════════════════════════════════════════ */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CUSTOM SLEEK SCROLLBAR
+   ═══════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-0);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border-radius: 4px;
+  border: 2px solid var(--surface-0);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   REDUCED MOTION — Global Kill Switch
+   ═══════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

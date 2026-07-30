@@ -48,7 +48,7 @@ export default function SegmentComparisonChart({ spec }: SegmentComparisonChartP
   }
 
   return (
-    <div className="w-full bg-slate-950 p-6 rounded-xl border border-slate-800 shadow-2xl overflow-x-auto">
+    <div className="w-full glass-card-lg rounded-xl p-6 shadow-2xl overflow-x-auto">
       <div ref={containerRef} className="w-full flex justify-center" data-testid="vega-embed-container" />
     </div>
   );
