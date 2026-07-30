@@ -235,3 +235,9 @@
 - Built reusable premium glassmorphic `<ErrorBoundaryUI />` component in `components/ErrorBoundaryUI.tsx` using `framer-motion` and `lucide-react` to provide a consistent, high-quality fallback experience when anomalies disrupt the React tree.
 - Decisions: Kept the error UI consistent with the cinematic visual design established in Session 14 and Session 22 (glow effects, backdrop blur, fluid animations).
 - Next session context: Frontend error handling is now comprehensive. All 14/14 frontend tests passing.
+
+## Session 27: Global Loading States
+- Implemented Next.js `loading.tsx` boundaries across all frontend route groups: `(auth)`, `(dashboard)`, and `(landing)`.
+- Built reusable premium glassmorphic `<LoadingUI />` component in `components/LoadingUI.tsx` using `framer-motion` and `lucide-react`. It provides instant, engaging feedback with animated glow rings and pulse effects during route transitions or data fetching.
+- Decisions: Ensured loading states perfectly match the cinematic and glassmorphic aesthetic of the platform, resolving the partial loading state issue identified in the audit.
+- Next session context: Frontend loading states and error boundaries are fully integrated.
