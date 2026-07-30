@@ -11,7 +11,7 @@ import AtroposCard from "@/components/AtroposCard";
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [workspaceId, setWorkspaceId] = useState("1");
+  const [workspaceName, setWorkspaceName] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -29,7 +29,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email,
           password,
-          workspace_id: parseInt(workspaceId),
+          workspace_name: workspaceName,
           role: "member"
         }),
       });
@@ -129,18 +129,18 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Workspace ID</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1.5">Workspace Name</label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Building className="h-4 w-4 text-slate-500" />
                     </div>
                     <input
-                      type="number"
-                      value={workspaceId}
-                      onChange={(e) => setWorkspaceId(e.target.value)}
+                      type="text"
+                      value={workspaceName}
+                      onChange={(e) => setWorkspaceName(e.target.value)}
                       required
                       className="block w-full pl-10 pr-3 py-2.5 bg-slate-950/50 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all sm:text-sm"
-                      placeholder="1"
+                      placeholder="Acme Corp"
                     />
                   </div>
                 </div>

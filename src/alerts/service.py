@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 
 from src.ingestion.models import Metric
 from src.anomalies.models import Anomaly, AnomalyStatusEnum
@@ -154,3 +155,17 @@ async def mark_notification_read(db: AsyncSession, notification_id: int, workspa
         await db.commit()
         await db.refresh(notification)
     return notification
+
+async def delete_alert_rule(db: AsyncSession, metric_id: int, workspace_id: int) -> bool:
+    """Deletes an alert rule for a metric."""
+    res = await db.execute(
+        select(AlertRule)
+        .join(Metric, AlertRule.metric_id == Metric.id)
+        .where(AlertRule.metric_id == metric_id, Metric.workspace_id == workspace_id)
+    )
+    rule = res.scalar_one_or_none()
+    if rule:
+        await db.delete(rule)
+        await db.commit()
+        return True
+    return False

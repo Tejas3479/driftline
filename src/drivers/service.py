@@ -1,4 +1,6 @@
 import logging
+from pydantic import BaseModel
+import structlog
 from datetime import date, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np

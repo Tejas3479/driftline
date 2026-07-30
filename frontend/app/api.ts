@@ -439,3 +439,57 @@ export async function markNotificationRead(id: number): Promise<AppNotification>
   return res.json();
 }
 
+export interface WorkspaceUserCreate {
+  email: string;
+  password?: string;
+  role: string;
+}
+
+export interface WorkspaceUserUpdate {
+  role: string;
+}
+
+export async function fetchTeamMembers(workspaceId: number): Promise<User[]> {
+  const url = \/workspaces/\/users;
+  const res = await apiFetch(url, { cache: 'no-store' });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, 'Failed to fetch team members');
+  }
+  return res.json();
+}
+
+export async function addTeamMember(workspaceId: number, payload: WorkspaceUserCreate): Promise<User> {
+  const url = \/workspaces/\/users;
+  const res = await apiFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, 'Failed to add team member');
+  }
+  return res.json();
+}
+
+export async function updateTeamMemberRole(userId: number, payload: WorkspaceUserUpdate): Promise<User> {
+  const url = \/workspaces/users/\;
+  const res = await apiFetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, 'Failed to update team member role');
+  }
+  return res.json();
+}
+
+export async function removeTeamMember(userId: number): Promise<void> {
+  const url = \/workspaces/users/\;
+  const res = await apiFetch(url, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, 'Failed to remove team member');
+  }
+}

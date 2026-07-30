@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from src.auth.dependencies import get_current_user, verify_metric_access
 from src.auth.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.limiter import limiter
 
 from src.db.session import get_db
 from src.alerts.schemas import (

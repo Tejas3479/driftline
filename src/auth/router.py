@@ -24,20 +24,16 @@ async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)) -> A
             detail="The user with this email already exists in the system.",
         )
     
-    # Optional: check if workspace exists, for now we assume the workspace_id passed is valid or we create one if not
-    w_res = await db.execute(select(Workspace).where(Workspace.id == user_in.workspace_id))
-    if not w_res.scalar_one_or_none():
-        # Auto-create workspace if it doesn't exist for easy onboarding
-        workspace = Workspace(name=f"Workspace {user_in.workspace_id}")
-        db.add(workspace)
-        await db.commit()
-        await db.refresh(workspace)
-        user_in.workspace_id = workspace.id
+    # Always create a new workspace upon registration
+    workspace = Workspace(name=user_in.workspace_name)
+    db.add(workspace)
+    await db.commit()
+    await db.refresh(workspace)
         
     user = User(
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
-        workspace_id=user_in.workspace_id,
+        workspace_id=workspace.id,
         role=user_in.role
     )
     db.add(user)

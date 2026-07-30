@@ -17,8 +17,10 @@ import ScrollReveal from "@/components/ScrollReveal";
 import { useMetricContext } from "@/components/MetricContext";
 import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric, updateMetric, deleteMetric } from "@/app/api";
 import CustomSelect from "@/components/CustomSelect";
+import TeamManagement from "@/components/TeamManagement";
 
 export default function ModelHealthSettingsPage() {
+  const [activeTab, setActiveTab] = useState<"model" | "team">("model");
   const { selectedMetricId, setSelectedMetricId, metrics, loading: metricsLoading, refetchMetrics } = useMetricContext();
 
   const [accuracy, setAccuracy] = useState<AccuracyResponse | null>(null);
@@ -155,32 +157,58 @@ export default function ModelHealthSettingsPage() {
               </span>
             </div>
             <h1 className="text-4xl font-extrabold tracking-tight text-white mb-2">
-              Model Health & Settings
+              Settings & Administration
             </h1>
             <p className="text-slate-400 text-sm font-medium">
-              Monitor model calibration telemetry, MAPE accuracy track records, and metric parameters
+              Manage workspace members, model calibration telemetry, and metric parameters
             </p>
           </div>
 
-          {/* Metric Context Selector */}
-          <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-lg">
-            <Layers className="h-4 w-4 text-cyan-400" />
-            <span className="text-xs font-bold text-slate-400 uppercase">Target Metric:</span>
-            <CustomSelect
-              options={metrics.map((m) => ({
-                value: m.id,
-                label: m.name,
-                badge: `#${m.id}`,
-              }))}
-              value={currentMetric.id}
-              onChange={(val) => setSelectedMetricId(parseInt(String(val), 10))}
-              placeholder="Select Metric..."
-              className="min-w-[200px]"
-            />
+          {/* Navigation Tabs */}
+          <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-lg shrink-0">
+            <button
+              onClick={() => setActiveTab("model")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                activeTab === "model" ? "bg-cyan-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Model Health
+            </button>
+            <button
+              onClick={() => setActiveTab("team")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                activeTab === "team" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Workspace Team
+            </button>
           </div>
         </div>
 
-        {/* System Telemetry & Configuration Grid */}
+        {activeTab === "team" ? (
+          <TeamManagement />
+        ) : (
+          <>
+            <div className="flex justify-end mb-6">
+              {/* Metric Context Selector */}
+              <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-lg">
+                <Layers className="h-4 w-4 text-cyan-400" />
+                <span className="text-xs font-bold text-slate-400 uppercase">Target Metric:</span>
+                <CustomSelect
+                  options={metrics.map((m) => ({
+                    value: m.id,
+                    label: m.name,
+                    badge: `#${m.id}`,
+                  }))}
+                  value={currentMetric.id}
+                  onChange={(val) => setSelectedMetricId(parseInt(String(val), 10))}
+                  placeholder="Select Metric..."
+                  className="min-w-[200px]"
+                />
+              </div>
+            </div>
+
+            {/* System Telemetry & Configuration Grid */}
         <ScrollReveal direction="up" staggerChildren stagger={0.1}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
           {/* Column 1: Model Health Telemetry Cards */}
@@ -418,6 +446,8 @@ export default function ModelHealthSettingsPage() {
           </div>
         </div>
         </ScrollReveal>
+        </>
+        )}
       </div>
     </main>
   );

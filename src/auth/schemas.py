@@ -4,8 +4,8 @@ from typing import Optional
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    workspace_id: int
-    role: str = "member"
+    workspace_name: str
+    role: str = "admin"
 
 class UserRead(BaseModel):
     id: int

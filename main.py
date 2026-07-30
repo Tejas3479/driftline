@@ -16,6 +16,7 @@ from src.forecasting.router import router as forecasting_router
 from src.digests.router import router as digests_router
 from src.alerts.router import router as alerts_router
 from src.auth.router import router as auth_router
+from src.workspaces.router import router as workspaces_router
 from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -73,7 +74,7 @@ app.include_router(auth_router)
 app.include_router(auth_router, prefix="/api/v1", include_in_schema=False)
 
 # Register domain routers securely
-for r in [ingestion_router, anomalies_router, drivers_router, forecasting_router, digests_router, alerts_router]:
+for r in [ingestion_router, anomalies_router, drivers_router, forecasting_router, digests_router, alerts_router, workspaces_router]:
     app.include_router(r)
     app.include_router(r, prefix="/api/v1", include_in_schema=False)
 
