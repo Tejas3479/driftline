@@ -1,9 +1,11 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+
+from src.auth.dependencies import get_current_user
 
 from src.db.session import engine, AsyncSessionLocal
 from src.ingestion.service import seed_default_workspace
@@ -13,6 +15,7 @@ from src.drivers.router import router as drivers_router
 from src.forecasting.router import router as forecasting_router
 from src.digests.router import router as digests_router
 from src.alerts.router import router as alerts_router
+from src.auth.router import router as auth_router
 from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest
 
 scheduler = AsyncIOScheduler()
@@ -52,7 +55,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Domain routers: primary mounts exposed in OpenAPI schema, fallback mounts for /api/v1 prefix compatibility
+# Register auth router publicly
+app.include_router(auth_router)
+app.include_router(auth_router, prefix="/api/v1", include_in_schema=False)
+
+# Register domain routers securely
 for r in [ingestion_router, anomalies_router, drivers_router, forecasting_router, digests_router, alerts_router]:
     app.include_router(r)
     app.include_router(r, prefix="/api/v1", include_in_schema=False)

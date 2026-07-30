@@ -1,6 +1,7 @@
 import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from src.auth.dependencies import get_current_user
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +9,7 @@ from src.db.session import get_db
 from src.digests.schemas import DigestResponseSchema, DigestGenerateRequestSchema
 from src.digests.service import generate_weekly_digest, get_digest_by_id, list_digests
 
-router = APIRouter(tags=["digests"])
+router = APIRouter(dependencies=[Depends(get_current_user)], tags=["digests"])
 
 @router.get("/digests/{id}")
 async def get_digest_pdf_endpoint(

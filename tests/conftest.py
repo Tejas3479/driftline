@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.pool import NullPool
 from main import app
 from src.db.session import get_db, DATABASE_URL
+from src.auth.dependencies import get_current_user
+from src.auth.models import User
 
 @pytest.fixture(autouse=True)
 async def override_db_dependency():
@@ -17,6 +19,11 @@ async def override_db_dependency():
                 await session.close()
                 
     app.dependency_overrides[get_db] = _get_test_db
+    
+    async def _get_mock_user():
+        return User(id=1, email="test@example.com", workspace_id=1, role="member", is_active=True)
+        
+    app.dependency_overrides[get_current_user] = _get_mock_user
     yield
     app.dependency_overrides.clear()
     await test_engine.dispose()

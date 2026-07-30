@@ -25,6 +25,7 @@ import src.drivers.models
 import src.forecasting.models
 import src.digests.models
 import src.alerts.models
+import src.auth.models
 
 target_metadata = Base.metadata
 

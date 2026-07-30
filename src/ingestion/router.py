@@ -2,6 +2,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
+from src.auth.models import User
+from src.auth.dependencies import get_current_user
 from src.ingestion.schemas import (
     MetricCreateSchema,
     MetricResponseSchema,
@@ -11,20 +13,23 @@ from src.ingestion.schemas import (
 )
 import src.ingestion.service as service
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/metrics", response_model=List[MetricResponseSchema])
 async def list_metrics_endpoint(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    return await service.list_metrics(db)
+    return await service.list_metrics(db, current_user.workspace_id)
 
 @router.post("/metrics", response_model=MetricResponseSchema, status_code=status.HTTP_201_CREATED)
 async def create_metric_endpoint(
     schema: MetricCreateSchema,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    return await service.create_metric(db, schema)
+    # Enforce metric belongs to current user's workspace
+    return await service.create_metric(db, schema, current_user.workspace_id)
 
 @router.post("/metrics/{id}/data", response_model=InspectionResponseSchema)
 async def upload_and_inspect_data_endpoint(

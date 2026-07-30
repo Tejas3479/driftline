@@ -80,9 +80,11 @@ async def ensure_workspace_exists(db: AsyncSession, workspace_id: int = 1) -> Wo
         await db.refresh(workspace)
     return workspace
 
-async def create_metric(db: AsyncSession, schema: MetricCreateSchema) -> Metric:
+async def create_metric(db: AsyncSession, schema: MetricCreateSchema, current_workspace_id: int) -> Metric:
     """Create a new metric configuration."""
-    ws_id = schema.workspace_id or 1
+    ws_id = schema.workspace_id or current_workspace_id
+    if ws_id != current_workspace_id:
+        raise ValueError("Cannot create metric in a different workspace")
     await ensure_workspace_exists(db, ws_id)
     metric = Metric(
         workspace_id=ws_id,
@@ -393,10 +395,9 @@ async def confirm_and_persist_observations(
         "total_observations": total_obs
     }
 
-async def list_metrics(db: AsyncSession) -> List[Metric]:
+async def list_metrics(db: AsyncSession, workspace_id: int) -> List[Metric]:
     """
-    Retrieve all metric configurations.
-    NOTE for Session 19: Add workspace/tenant scoping filters once authentication is introduced.
+    Retrieve all metric configurations for a given workspace.
     """
-    result = await db.execute(select(Metric).order_by(Metric.id))
+    result = await db.execute(select(Metric).where(Metric.workspace_id == workspace_id).order_by(Metric.id))
     return list(result.scalars().all())

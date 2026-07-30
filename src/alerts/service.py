@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.ingestion.models import Metric
 from src.anomalies.models import Anomaly, AnomalyStatusEnum
-from src.alerts.models import AlertRule, Notification, User
+from src.alerts.models import AlertRule, Notification
+from src.auth.models import User
 from src.alerts.schemas import AlertRuleCreateSchema, ChannelEnum
 from src.alerts.email import send_immediate_alert_email
 

@@ -13,13 +13,7 @@ class AlertRule(Base):
     min_severity: Mapped[float] = mapped_column(Float, nullable=False)
     channels: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
-class User(Base):
-    __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False, default="member")
 
 class Notification(Base):
     __tablename__ = "notifications"

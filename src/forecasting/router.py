@@ -1,12 +1,13 @@
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.auth.dependencies import get_current_user
 from src.db.session import get_db
 from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema, AccuracyResponseSchema
 from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy
 
-router = APIRouter(prefix="/metrics", tags=["forecasting"])
+router = APIRouter(prefix="/metrics", tags=["forecasting"], dependencies=[Depends(get_current_user)])
 
 @router.get("/{id}/forecast", response_model=ForecastResultSchema)
 async def get_metric_forecast_endpoint(

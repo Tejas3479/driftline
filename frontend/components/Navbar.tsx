@@ -16,14 +16,17 @@ import {
   X,
   Sparkles,
   Plus,
+  LogOut,
 } from "lucide-react";
 import { useMetricContext } from "./MetricContext";
 import CustomSelect from "./CustomSelect";
 import DataUploadModal from "./DataUploadModal";
+import { useAuth } from "./AuthProvider";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { selectedMetricId, setSelectedMetricId, metrics, loading } = useMetricContext();
+  const { metrics, selectedMetricId, setSelectedMetricId, loading } = useMetricContext();
+  const { logout, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
@@ -167,6 +170,17 @@ export default function Navbar() {
               </Link>
             );
           })}
+          
+          {user && (
+            <button
+              onClick={logout}
+              className="relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-red-400 hover:bg-slate-900/50 ml-2"
+              title={`Logged in as ${user.email}`}
+            >
+              <LogOut className="relative z-10 h-3.5 w-3.5" />
+              <span className="relative z-10">Sign Out</span>
+            </button>
+          )}
         </nav>
 
         {/* Mobile Hamburger Toggle Button */}

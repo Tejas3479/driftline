@@ -1,5 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from src.auth.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import get_db
@@ -15,7 +16,7 @@ from src.alerts.service import (
     mark_notification_read,
 )
 
-router = APIRouter(tags=["alerts"])
+router = APIRouter(dependencies=[Depends(get_current_user)], tags=["alerts"])
 
 @router.post("/alert-rules", response_model=AlertRuleResponseSchema, status_code=status.HTTP_201_CREATED)
 async def create_or_update_alert_rule_endpoint(

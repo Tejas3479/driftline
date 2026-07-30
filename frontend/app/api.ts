@@ -1,3 +1,11 @@
+export interface User {
+  id: number;
+  email: string;
+  workspace_id: number;
+  role: string;
+  is_active: boolean;
+}
+
 export interface Metric {
   id: number;
   workspace_id: number;
@@ -83,8 +91,29 @@ async function parseErrorDetail(res: Response, fallbackPrefix: string): Promise<
   return new Error(`${fallbackPrefix}: ${detail}`);
 }
 
+async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem("driftline_token") : null;
+  const headers = new Headers(init?.headers);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  
+  const res = await fetch(input, {
+    ...init,
+    headers,
+  });
+  
+  if (res.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem("driftline_token");
+    if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+      window.location.href = '/login';
+    }
+  }
+  return res;
+}
+
 export async function fetchMetrics(): Promise<Metric[]> {
-  const res = await fetch(`${API_BASE_URL}/metrics`, { cache: 'no-store' });
+  const res = await apiFetch(`${API_BASE_URL}/metrics`, { cache: 'no-store' });
   if (!res.ok) {
     throw await parseErrorDetail(res, 'Failed to fetch metrics');
   }
@@ -95,7 +124,7 @@ export async function fetchTimeseries(metricId: number, segment?: string): Promi
   const url = segment
     ? `${API_BASE_URL}/metrics/${metricId}/timeseries?segment=${encodeURIComponent(segment)}`
     : `${API_BASE_URL}/metrics/${metricId}/timeseries`;
-  const res = await fetch(url, { cache: 'no-store' });
+  const res = await apiFetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch timeseries for metric ${metricId}`);
   }
@@ -103,7 +132,7 @@ export async function fetchTimeseries(metricId: number, segment?: string): Promi
 }
 
 export async function fetchAnomalies(metricId: number): Promise<Anomaly[]> {
-  const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/anomalies`, { cache: 'no-store' });
+  const res = await apiFetch(`${API_BASE_URL}/metrics/${metricId}/anomalies`, { cache: 'no-store' });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch anomalies for metric ${metricId}`);
   }
@@ -111,7 +140,7 @@ export async function fetchAnomalies(metricId: number): Promise<Anomaly[]> {
 }
 
 export async function fetchAnomalyDetail(anomalyId: number): Promise<Anomaly> {
-  const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}`, { cache: 'no-store' });
+  const res = await apiFetch(`${API_BASE_URL}/anomalies/${anomalyId}`, { cache: 'no-store' });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch anomaly detail for anomaly ${anomalyId}`);
   }
@@ -119,7 +148,7 @@ export async function fetchAnomalyDetail(anomalyId: number): Promise<Anomaly> {
 }
 
 export async function fetchAnomalyDrivers(anomalyId: number): Promise<AnomalyDriversResponse> {
-  const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}/drivers`, { cache: 'no-store' });
+  const res = await apiFetch(`${API_BASE_URL}/anomalies/${anomalyId}/drivers`, { cache: 'no-store' });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch drivers for anomaly ${anomalyId}`);
   }
@@ -130,7 +159,7 @@ export async function submitAnomalyFeedback(
   anomalyId: number,
   status: 'new' | 'reviewed' | 'resolved' | 'false_positive'
 ): Promise<Anomaly> {
-  const res = await fetch(`${API_BASE_URL}/anomalies/${anomalyId}/feedback`, {
+  const res = await apiFetch(`${API_BASE_URL}/anomalies/${anomalyId}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -192,7 +221,7 @@ export async function fetchForecast(
   signal?: AbortSignal
 ): Promise<ForecastResult> {
   const url = `${API_BASE_URL}/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}`;
-  const res = await fetch(url, { cache: 'no-store', signal });
+  const res = await apiFetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch forecast for metric ${metricId}`);
   }
@@ -206,7 +235,7 @@ export async function fetchAccuracy(
   signal?: AbortSignal
 ): Promise<AccuracyResponse> {
   const url = `${API_BASE_URL}/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}`;
-  const res = await fetch(url, { cache: 'no-store', signal });
+  const res = await apiFetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch forecast accuracy for metric ${metricId}`);
   }
@@ -228,7 +257,7 @@ export async function fetchSegmentComparison(
   if (endDate) params.set('end_date', endDate);
 
   const url = `${API_BASE_URL}/metrics/${metricId}/segment-comparison?${params.toString()}`;
-  const res = await fetch(url, { cache: 'no-store', signal });
+  const res = await apiFetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch segment comparison for metric ${metricId}`);
   }
@@ -256,7 +285,7 @@ export async function fetchGlobalAnomalies(
   if (metricId) params.set('metric_id', metricId.toString());
 
   const url = `${API_BASE_URL}/anomalies?${params.toString()}`;
-  const res = await fetch(url, { cache: 'no-store', signal });
+  const res = await apiFetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
     throw await parseErrorDetail(res, 'Failed to fetch global anomalies log');
   }
@@ -316,7 +345,7 @@ export interface DataConfirmResponseSchema {
 }
 
 export async function createMetric(payload: MetricCreateSchema): Promise<Metric> {
-  const res = await fetch(`${API_BASE_URL}/metrics`, {
+  const res = await apiFetch(`${API_BASE_URL}/metrics`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -331,7 +360,7 @@ export async function inspectCsvData(metricId: number, file: File): Promise<Insp
   const formData = new FormData();
   formData.append('file', file);
 
-  const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/data`, {
+  const res = await apiFetch(`${API_BASE_URL}/metrics/${metricId}/data`, {
     method: 'POST',
     body: formData,
   });
@@ -342,7 +371,7 @@ export async function inspectCsvData(metricId: number, file: File): Promise<Insp
 }
 
 export async function confirmCsvData(metricId: number, payload: DataConfirmSchema): Promise<DataConfirmResponseSchema> {
-  const res = await fetch(`${API_BASE_URL}/metrics/${metricId}/data/confirm`, {
+  const res = await apiFetch(`${API_BASE_URL}/metrics/${metricId}/data/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

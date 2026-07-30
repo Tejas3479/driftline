@@ -1,12 +1,13 @@
 from datetime import date
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from src.auth.dependencies import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.drivers.schemas import AnomalyDriversResponseSchema
 import src.drivers.service as service
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/anomalies/{id}/drivers", response_model=AnomalyDriversResponseSchema)
 async def get_anomaly_drivers_endpoint(
