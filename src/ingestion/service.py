@@ -102,6 +102,19 @@ async def get_metric(db: AsyncSession, metric_id: int) -> Optional[Metric]:
     result = await db.execute(select(Metric).where(Metric.id == metric_id))
     return result.scalar_one_or_none()
 
+async def update_metric(db: AsyncSession, metric: Metric, schema: 'MetricUpdateSchema') -> Metric:
+    """Update metric configuration."""
+    if schema.sensitivity is not None:
+        metric.sensitivity = schema.sensitivity
+    if schema.direction_good is not None:
+        metric.direction_good = schema.direction_good
+    if schema.z_score_weight is not None:
+        metric.z_score_weight = schema.z_score_weight
+    
+    await db.commit()
+    await db.refresh(metric)
+    return metric
+
 def inspect_and_validate_csv(metric: Metric, file_bytes: bytes) -> Dict[str, Any]:
     """
     Step 2: Read CSV with Polars, infer columns, generate validation report, and detect date gaps.

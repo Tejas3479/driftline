@@ -356,6 +356,24 @@ export async function createMetric(payload: MetricCreateSchema): Promise<Metric>
   return res.json();
 }
 
+export interface MetricUpdateSchema {
+  sensitivity?: 'low' | 'medium' | 'high';
+  direction_good?: 'up_is_good' | 'down_is_good';
+  z_score_weight?: number;
+}
+
+export async function updateMetric(metricId: number, payload: MetricUpdateSchema): Promise<Metric> {
+  const res = await apiFetch(`${API_BASE_URL}/metrics/${metricId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to update metric ${metricId}`);
+  }
+  return res.json();
+}
+
 export async function inspectCsvData(metricId: number, file: File): Promise<InspectionResponseSchema> {
   const formData = new FormData();
   formData.append('file', file);

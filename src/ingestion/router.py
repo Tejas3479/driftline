@@ -6,6 +6,7 @@ from src.auth.models import User
 from src.auth.dependencies import get_current_user, verify_metric_access
 from src.ingestion.schemas import (
     MetricCreateSchema,
+    MetricUpdateSchema,
     MetricResponseSchema,
     InspectionResponseSchema,
     DataConfirmSchema,
@@ -30,6 +31,16 @@ async def create_metric_endpoint(
 ):
     # Enforce metric belongs to current user's workspace
     return await service.create_metric(db, schema, current_user.workspace_id)
+
+@router.patch("/metrics/{id}", response_model=MetricResponseSchema)
+async def update_metric_endpoint(
+    id: int,
+    schema: MetricUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    metric = await verify_metric_access(id, db, current_user.workspace_id)
+    return await service.update_metric(db, metric, schema)
 
 @router.post("/metrics/{id}/data", response_model=InspectionResponseSchema)
 async def upload_and_inspect_data_endpoint(

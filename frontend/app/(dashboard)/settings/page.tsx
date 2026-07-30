@@ -15,16 +15,53 @@ import {
 } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import { useMetricContext } from "@/components/MetricContext";
-import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric } from "@/app/api";
+import { fetchAccuracy, fetchForecast, AccuracyResponse, ForecastResult, Metric, updateMetric } from "@/app/api";
 import CustomSelect from "@/components/CustomSelect";
 
 export default function ModelHealthSettingsPage() {
-  const { selectedMetricId, setSelectedMetricId, metrics, loading: metricsLoading } = useMetricContext();
+  const { selectedMetricId, setSelectedMetricId, metrics, loading: metricsLoading, refetchMetrics } = useMetricContext();
 
   const [accuracy, setAccuracy] = useState<AccuracyResponse | null>(null);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const currentMetric = metrics.find((m) => m.id === selectedMetricId) || metrics[0];
+
+  const [sensitivity, setSensitivity] = useState(currentMetric?.sensitivity || "medium");
+  const [directionGood, setDirectionGood] = useState(currentMetric?.direction_good || "up_is_good");
+  const [zScoreWeight, setZScoreWeight] = useState(currentMetric?.z_score_weight ?? 0.5);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (currentMetric) {
+      setSensitivity(currentMetric.sensitivity || "medium");
+      setDirectionGood(currentMetric.direction_good || "up_is_good");
+      setZScoreWeight(currentMetric.z_score_weight ?? 0.5);
+    }
+  }, [currentMetric]);
+
+  const handleSaveSettings = async () => {
+    if (!currentMetric) return;
+    try {
+      setIsSaving(true);
+      setSaveSuccess(false);
+      setError(null);
+      await updateMetric(currentMetric.id, {
+        sensitivity: sensitivity as any,
+        direction_good: directionGood as any,
+        z_score_weight: zScoreWeight,
+      });
+      await refetchMetrics();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      setError(err.message || "Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const currentMetric = metrics.find((m) => m.id === selectedMetricId) || metrics[0];
 
@@ -263,9 +300,15 @@ export default function ModelHealthSettingsPage() {
                 <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
                   Anomaly Detection Sensitivity
                 </label>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-cyan-300 uppercase">
-                  {currentMetric.sensitivity || "medium"}
-                </div>
+                <select 
+                  value={sensitivity} 
+                  onChange={(e) => setSensitivity(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-cyan-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                >
+                  <option value="low">LOW</option>
+                  <option value="medium">MEDIUM</option>
+                  <option value="high">HIGH</option>
+                </select>
                 <p className="text-xs text-slate-500 font-medium mt-1">
                   Controls threshold scale factor for z-score & isolation forest scoring
                 </p>
@@ -277,11 +320,39 @@ export default function ModelHealthSettingsPage() {
                 <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
                   Target Direction Preference
                 </label>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-emerald-300 uppercase">
-                  {currentMetric.direction_good || "up_is_good"}
-                </div>
+                <select 
+                  value={directionGood} 
+                  onChange={(e) => setDirectionGood(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-emerald-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="up_is_good">UP IS GOOD</option>
+                  <option value="down_is_good">DOWN IS GOOD</option>
+                </select>
                 <p className="text-xs text-slate-500 font-medium mt-1">
                   Defines whether positive shifts indicate healthy or adverse trends
+                </p>
+              </div>
+              
+              <div className="h-px bg-slate-800" />
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
+                  Z-Score Weight (Ensemble Mix)
+                </label>
+                <div className="flex items-center gap-4">
+                  <input 
+                    type="range" 
+                    min="0" max="1" step="0.1" 
+                    value={zScoreWeight} 
+                    onChange={(e) => setZScoreWeight(parseFloat(e.target.value))}
+                    className="w-full accent-purple-500"
+                  />
+                  <span className="text-purple-300 font-extrabold text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                    {zScoreWeight.toFixed(1)}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Weight of Z-Score in final anomaly scoring (remaining weight goes to Isolation Forest)
                 </p>
               </div>
 
@@ -291,9 +362,25 @@ export default function ModelHealthSettingsPage() {
                 <label className="text-xs font-bold text-slate-400 uppercase block mb-2">
                   Data Grain
                 </label>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-purple-300 uppercase">
-                  {currentMetric.grain || "daily"}
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 font-extrabold text-xs text-slate-300 uppercase">
+                  {currentMetric.grain || "daily"} (Immutable)
                 </div>
+              </div>
+              
+              <div className="pt-4">
+                <button 
+                  onClick={handleSaveSettings}
+                  disabled={isSaving}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-bold py-2.5 px-4 rounded-lg transition-all shadow-lg hover:shadow-glow-cyan-sm disabled:opacity-50"
+                >
+                  {isSaving ? <Activity className="h-5 w-5 animate-spin" /> : <Settings className="h-5 w-5" />}
+                  {isSaving ? "Saving..." : "Save Settings"}
+                </button>
+                {saveSuccess && (
+                  <div className="mt-2 text-center text-emerald-400 text-xs font-bold flex items-center justify-center gap-1">
+                    <CheckCircle className="h-4 w-4" /> Settings updated successfully
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -10,6 +10,11 @@ class MetricCreateSchema(BaseModel):
     sensitivity: SensitivityEnum = SensitivityEnum.medium
     grain: GrainEnum = GrainEnum.daily
 
+class MetricUpdateSchema(BaseModel):
+    sensitivity: Optional[SensitivityEnum] = None
+    direction_good: Optional[DirectionGoodEnum] = None
+    z_score_weight: Optional[float] = Field(None, ge=0.0, le=1.0)
+
 class MetricResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
