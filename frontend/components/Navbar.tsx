@@ -23,6 +23,7 @@ import CustomSelect from "./CustomSelect";
 import DataUploadModal from "./DataUploadModal";
 import { Bell, BellRing, Check } from "lucide-react";
 import { AppNotification, fetchNotifications, markNotificationRead } from "@/app/api";
+import { useAuth } from "./AuthProvider";
 
 export default function Navbar() {
   const pathname = usePathname();

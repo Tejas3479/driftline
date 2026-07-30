@@ -220,11 +220,18 @@
 - Verified zero TypeScript compilation errors.
 - Next session context: The primary headless onboarding flow is complete. Ready for next priorities: offloading CPU-heavy ML ops to thread pools, or JWT authentication.
 
+
 ## Session 25: Full-Stack Authentication & Authorization
 - Built complete backend auth layer in src/auth/ using JWTs. Secured all 6 domain API routers with Depends(get_current_user).
 - Ran Alembic migration to include hashed_password to users and seed a default admin.
 - Overrode FastAPI dependencies in 	ests/conftest.py ensuring the 52 integration tests remain functional and robust.
 - Built frontend AuthProvider.tsx to wrap Next.js application, manage local storage state, and handle global client-side route protection for dashboard pages.
-- Refactored pi.ts to intercept 401 Unauthorized responses for login redirect and gracefully attach Authorization: Bearer headers to all internal requests.
+- Refactored api.ts to intercept 401 Unauthorized responses for login redirect and gracefully attach Authorization: Bearer headers to all internal requests.
 - Built premium glassmorphic /login and /register components.
 - Next session context: Authentication completely resolves the previous audit gap. 52/52 backend tests and 14/14 frontend tests passing. Build successful.
+
+## Session 26: Global Error Boundaries
+- Implemented global Next.js `error.tsx` boundaries for all frontend route groups: `(auth)`, `(dashboard)`, and `(landing)`.
+- Built reusable premium glassmorphic `<ErrorBoundaryUI />` component in `components/ErrorBoundaryUI.tsx` using `framer-motion` and `lucide-react` to provide a consistent, high-quality fallback experience when anomalies disrupt the React tree.
+- Decisions: Kept the error UI consistent with the cinematic visual design established in Session 14 and Session 22 (glow effects, backdrop blur, fluid animations).
+- Next session context: Frontend error handling is now comprehensive. All 14/14 frontend tests passing.

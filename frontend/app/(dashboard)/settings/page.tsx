@@ -63,7 +63,7 @@ export default function ModelHealthSettingsPage() {
     }
   };
 
-  const currentMetric = metrics.find((m) => m.id === selectedMetricId) || metrics[0];
+
 
   useEffect(() => {
     if (!currentMetric) return;
@@ -302,7 +302,7 @@ export default function ModelHealthSettingsPage() {
                 </label>
                 <select 
                   value={sensitivity} 
-                  onChange={(e) => setSensitivity(e.target.value)}
+                  onChange={(e) => setSensitivity(e.target.value as "low" | "medium" | "high")}
                   className="w-full bg-slate-950 border border-slate-800 text-cyan-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500"
                 >
                   <option value="low">LOW</option>
@@ -322,7 +322,7 @@ export default function ModelHealthSettingsPage() {
                 </label>
                 <select 
                   value={directionGood} 
-                  onChange={(e) => setDirectionGood(e.target.value)}
+                  onChange={(e) => setDirectionGood(e.target.value as "up_is_good" | "down_is_good")}
                   className="w-full bg-slate-950 border border-slate-800 text-emerald-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 >
                   <option value="up_is_good">UP IS GOOD</option>
