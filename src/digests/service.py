@@ -1,5 +1,6 @@
 import os
-import logging
+import structlog
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -21,7 +22,7 @@ from src.forecasting.models import Forecast, ForecastAccuracyLog
 from src.forecasting.service import generate_multi_step_forecast, run_walk_forward_backtest, get_forecast_accuracy
 from src.digests.models import Digest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 STORAGE_DIR = os.getenv("DIGEST_STORAGE_DIR", os.path.join(os.getcwd(), "storage", "digests"))
 
@@ -242,6 +243,7 @@ async def run_daily_pipeline(
     For every metric (or filtered metric_ids): re-runs decomposition on new data, runs anomaly detection, and computes driver analysis.
     Manages self-contained AsyncSessionLocal lifecycle if db is None.
     """
+    structlog.contextvars.bind_contextvars(request_id=f"sched-{uuid.uuid4().hex[:8]}")
     if db is None:
         async with AsyncSessionLocal() as session:
             return await run_daily_pipeline(db=session, metric_ids=metric_ids)
@@ -301,6 +303,7 @@ async def run_weekly_retrain_and_digest(
     runs walk-forward backtest, generates the weekly digest PDF, and dispatches weekly email.
     Manages self-contained AsyncSessionLocal lifecycle if db is None.
     """
+    structlog.contextvars.bind_contextvars(request_id=f"sched-{uuid.uuid4().hex[:8]}")
     if db is None:
         async with AsyncSessionLocal() as session:
             return await run_weekly_retrain_and_digest(db=session, metric_ids=metric_ids)

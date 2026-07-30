@@ -11,7 +11,7 @@ from src.auth.models import User
 from src.alerts.schemas import AlertRuleCreateSchema, ChannelEnum
 from src.alerts.email import send_immediate_alert_email
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 async def create_or_update_alert_rule(db: AsyncSession, schema: AlertRuleCreateSchema) -> AlertRule:
     """

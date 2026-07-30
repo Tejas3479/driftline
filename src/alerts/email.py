@@ -1,12 +1,12 @@
 import os
 import smtplib
-import logging
+import structlog
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 SMTP_HOST = os.getenv("SMTP_HOST", "localhost")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

@@ -20,6 +20,12 @@ from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_diges
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from src.limiter import limiter
+from asgi_correlation_id import CorrelationIdMiddleware
+from src.logger import setup_logging
+import structlog
+
+setup_logging()
+logger = structlog.get_logger(__name__)
 
 scheduler = AsyncIOScheduler()
 
@@ -30,7 +36,7 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as session:
             await seed_default_workspace(session)
     except Exception as e:
-        print(f"[!] Warning seeding default workspace on startup: {e}")
+        logger.warning(f"Warning seeding default workspace on startup: {e}")
 
     scheduler.add_job(run_daily_pipeline, CronTrigger(hour=2, minute=0))
     scheduler.add_job(run_weekly_retrain_and_digest, CronTrigger(day_of_week="mon", hour=3))
@@ -60,6 +66,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CorrelationIdMiddleware)
 
 # Register auth router publicly
 app.include_router(auth_router)

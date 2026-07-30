@@ -14,7 +14,7 @@ from src.anomalies.models import Anomaly, DailyRollup
 from src.drivers.models import AnomalyDriver
 from src.drivers.schemas import SegmentContributionSchema, StructuralImportanceSchema, AnomalyDriversResponseSchema
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace_id: int) -> Dict[str, Any]:

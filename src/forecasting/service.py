@@ -1,5 +1,5 @@
 import json
-import logging
+import structlog
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -10,8 +10,8 @@ from xgboost import XGBRegressor
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.ingestion.models import Metric
+from src.db.session import AsyncSessionLocal
+from src.ingestion.models import Metric, Observation
 from src.anomalies.models import DailyRollup
 from src.anomalies.service import decompose_timeseries
 from src.forecasting.models import Forecast, ForecastAccuracyLog
@@ -22,7 +22,7 @@ from src.forecasting.schemas import (
     AccuracyResponseSchema,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 FEATURE_COLUMNS = [
     "lag_1",
