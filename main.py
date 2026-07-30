@@ -17,6 +17,9 @@ from src.digests.router import router as digests_router
 from src.alerts.router import router as alerts_router
 from src.auth.router import router as auth_router
 from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from src.limiter import limiter
 
 scheduler = AsyncIOScheduler()
 
@@ -43,6 +46,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 cors_origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
 cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]

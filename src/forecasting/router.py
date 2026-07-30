@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import get_current_user, verify_metric_access
@@ -7,11 +7,14 @@ from src.auth.models import User
 from src.db.session import get_db
 from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema, AccuracyResponseSchema
 from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy
+from src.limiter import limiter
 
 router = APIRouter(prefix="/metrics", tags=["forecasting"], dependencies=[Depends(get_current_user)])
 
 @router.get("/{id}/forecast", response_model=ForecastResultSchema)
+@limiter.limit("5/minute")
 async def get_metric_forecast_endpoint(
+    request: Request,
     id: int,
     horizon: int = Query(30, ge=1, le=90, description="Forecast horizon in days (7, 14, or 30)"),
     backend: str = Query("lightgbm", pattern="^(lightgbm|xgboost)$", description="Model backend ('lightgbm' or 'xgboost')"),
@@ -61,7 +64,9 @@ async def get_metric_forecast_endpoint(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate forecast: {str(e)}")
 
 @router.get("/{id}/accuracy", response_model=AccuracyResponseSchema)
+@limiter.limit("15/minute")
 async def get_metric_accuracy_endpoint(
+    request: Request,
     id: int,
     horizon: int = Query(7, ge=1, le=90, description="Horizon to evaluate accuracy for"),
     backend: str = Query("lightgbm", pattern="^(lightgbm|xgboost)$", description="Model backend ('lightgbm' or 'xgboost')"),

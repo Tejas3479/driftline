@@ -1,17 +1,20 @@
 from datetime import date
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from src.auth.dependencies import get_current_user, verify_metric_access
 from src.auth.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.drivers.schemas import AnomalyDriversResponseSchema
 import src.drivers.service as service
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/anomalies/{id}/drivers", response_model=AnomalyDriversResponseSchema)
+@limiter.limit("10/minute")
 async def get_anomaly_drivers_endpoint(
+    request: Request,
     id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -19,7 +22,9 @@ async def get_anomaly_drivers_endpoint(
     return await service.calculate_anomaly_drivers(db, id, current_user.workspace_id)
 
 @router.get("/metrics/{id}/segment-comparison")
+@limiter.limit("60/minute")
 async def get_segment_comparison_endpoint(
+    request: Request,
     id: int,
     dimension: Optional[str] = Query(None, description="Dimension name to compare segments for"),
     range: Optional[str] = Query("all", pattern="^(7d|30d|90d|1y|all)$", description="Date range filter anchored to max date"),

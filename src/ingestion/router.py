@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.auth.models import User
@@ -13,18 +13,23 @@ from src.ingestion.schemas import (
     DataConfirmResponseSchema,
 )
 import src.ingestion.service as service
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 @router.get("/metrics", response_model=List[MetricResponseSchema])
+@limiter.limit("60/minute")
 async def list_metrics_endpoint(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     return await service.list_metrics(db, current_user.workspace_id)
 
 @router.post("/metrics", response_model=MetricResponseSchema, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
 async def create_metric_endpoint(
+    request: Request,
     schema: MetricCreateSchema,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -33,7 +38,9 @@ async def create_metric_endpoint(
     return await service.create_metric(db, schema, current_user.workspace_id)
 
 @router.patch("/metrics/{id}", response_model=MetricResponseSchema)
+@limiter.limit("20/minute")
 async def update_metric_endpoint(
+    request: Request,
     id: int,
     schema: MetricUpdateSchema,
     db: AsyncSession = Depends(get_db),
@@ -43,7 +50,9 @@ async def update_metric_endpoint(
     return await service.update_metric(db, metric, schema)
 
 @router.post("/metrics/{id}/data", response_model=InspectionResponseSchema)
+@limiter.limit("20/minute")
 async def upload_and_inspect_data_endpoint(
+    request: Request,
     id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -61,7 +70,9 @@ async def upload_and_inspect_data_endpoint(
     }
 
 @router.post("/metrics/{id}/data/confirm", response_model=DataConfirmResponseSchema)
+@limiter.limit("20/minute")
 async def confirm_data_endpoint(
+    request: Request,
     id: int,
     schema: DataConfirmSchema,
     db: AsyncSession = Depends(get_db),
