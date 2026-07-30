@@ -9,6 +9,7 @@ from src.db.session import get_db
 from src.auth.security import SECRET_KEY, ALGORITHM
 from src.auth.models import User
 from src.auth.schemas import TokenData
+from src.ingestion.models import Metric
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -37,3 +38,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         raise HTTPException(status_code=400, detail="Inactive user")
         
     return user
+
+async def verify_metric_access(metric_id: int, db: AsyncSession, workspace_id: int) -> Metric:
+    res = await db.execute(select(Metric).where(Metric.id == metric_id, Metric.workspace_id == workspace_id))
+    metric = res.scalar_one_or_none()
+    if not metric:
+        raise HTTPException(status_code=404, detail=f"Metric with id {metric_id} not found.")
+    return metric

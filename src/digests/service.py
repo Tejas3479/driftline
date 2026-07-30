@@ -353,9 +353,10 @@ async def run_weekly_retrain_and_digest(
 
 
 
-async def get_digest_by_id(db: AsyncSession, digest_id: int) -> Optional[Digest]:
-    """Retrieves digest by primary key ID."""
-    res = await db.execute(select(Digest).where(Digest.id == digest_id))
+async def get_digest_by_id(db: AsyncSession, digest_id: int, workspace_id: int) -> Optional[Digest]:
+    """Retrieves digest by primary key ID and verifies workspace."""
+    stmt = select(Digest).where(Digest.id == digest_id, Digest.workspace_id == workspace_id)
+    res = await db.execute(stmt)
     return res.scalar_one_or_none()
 
 async def list_digests(

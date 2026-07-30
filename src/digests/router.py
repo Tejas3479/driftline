@@ -1,7 +1,8 @@
 import os
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_current_user, verify_metric_access
+from src.auth.models import User
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,13 +15,14 @@ router = APIRouter(dependencies=[Depends(get_current_user)], tags=["digests"])
 @router.get("/digests/{id}")
 async def get_digest_pdf_endpoint(
     id: int,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Serves/downloads the generated digest PDF file for the given digest ID.
     Returns HTTP 404 if digest record or physical file is missing.
     """
-    digest = await get_digest_by_id(db, id)
+    digest = await get_digest_by_id(db, id, current_user.workspace_id)
     if not digest:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Digest with id {id} not found.")
 
@@ -36,25 +38,26 @@ async def get_digest_pdf_endpoint(
 
 @router.get("/digests", response_model=List[DigestResponseSchema])
 async def list_digests_endpoint(
-    workspace_id: Optional[int] = Query(None, description="Optional workspace ID filter"),
     metric_id: Optional[int] = Query(None, description="Optional metric ID filter"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Lists all generated digest records."""
-    digests = await list_digests(db, workspace_id=workspace_id, metric_id=metric_id)
+    digests = await list_digests(db, workspace_id=current_user.workspace_id, metric_id=metric_id)
     return [DigestResponseSchema.model_validate(d) for d in digests]
 
 @router.post("/digests/generate", response_model=DigestResponseSchema, status_code=status.HTTP_201_CREATED)
 async def generate_digest_endpoint(
     payload: DigestGenerateRequestSchema,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Manually triggers weekly digest generation for a metric and records/overwrites PDF file idempotently.
     """
+    await verify_metric_access(payload.metric_id, db, current_user.workspace_id)
     try:
-        w_id = payload.workspace_id or 1
-        digest = await generate_weekly_digest(db=db, workspace_id=w_id, metric_id=payload.metric_id)
+        digest = await generate_weekly_digest(db=db, workspace_id=current_user.workspace_id, metric_id=payload.metric_id)
         return DigestResponseSchema.model_validate(digest)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

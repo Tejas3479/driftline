@@ -82,9 +82,7 @@ async def ensure_workspace_exists(db: AsyncSession, workspace_id: int = 1) -> Wo
 
 async def create_metric(db: AsyncSession, schema: MetricCreateSchema, current_workspace_id: int) -> Metric:
     """Create a new metric configuration."""
-    ws_id = schema.workspace_id or current_workspace_id
-    if ws_id != current_workspace_id:
-        raise ValueError("Cannot create metric in a different workspace")
+    ws_id = current_workspace_id
     await ensure_workspace_exists(db, ws_id)
     metric = Metric(
         workspace_id=ws_id,

@@ -449,72 +449,79 @@ async def get_anomalies(
     res = await db.execute(query)
     return list(res.scalars().all())
 
-async def get_anomaly_detail(db: AsyncSession, anomaly_id: int) -> Optional[Anomaly]:
-    """Retrieve detailed anomaly record."""
-    res = await db.execute(select(Anomaly).where(Anomaly.id == anomaly_id))
-    return res.scalar_one_or_none()
+async def get_anomaly_detail(db: AsyncSession, anomaly_id: int, workspace_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    """Retrieve full details for a specific anomaly."""
+    stmt = select(Anomaly, Metric).join(Metric, Anomaly.metric_id == Metric.id).where(Anomaly.id == anomaly_id)
+    if workspace_id is not None:
+        stmt = stmt.where(Metric.workspace_id == workspace_id)
+    res = await db.execute(stmt)
+    row = res.first()
+    if not row:
+        return None
+    anomaly, metric = row
+    return {"anomaly": anomaly, "metric": metric}
 
-async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: AnomalyStatusEnum) -> Anomaly:
+async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: AnomalyStatusEnum, workspace_id: Optional[int] = None) -> Anomaly:
     """Record anomaly feedback (reviews, false positives, etc.) and run weight updates/updates on false positives."""
-    anomaly = await get_anomaly_detail(db, anomaly_id)
-    if not anomaly:
+    detail = await get_anomaly_detail(db, anomaly_id, workspace_id)
+    if not detail:
         raise ValueError(f"Anomaly with id {anomaly_id} not found.")
-
+    
+    anomaly = detail["anomaly"]
     anomaly.status = status
 
     if status == AnomalyStatusEnum.false_positive:
-        metric = await get_metric(db, anomaly.metric_id)
-        if metric:
-            rollup_res = await db.execute(
-                select(DailyRollup).where(
-                    DailyRollup.metric_id == metric.id,
-                    DailyRollup.dimension_values == {}
-                ).order_by(DailyRollup.date)
-            )
-            rollups = rollup_res.scalars().all()
-            df_valid = compute_timeseries_anomaly_signals(metric, rollups)
-            
-            if df_valid is not None and not df_valid.empty:
-                row = df_valid[df_valid["date"] == anomaly.date]
-                if not row.empty:
-                    norm_z_val = float(row["norm_z"].values[0])
-                    iso_score_val = float(row["isolation_score"].values[0])
+        metric = detail["metric"]
+        rollup_res = await db.execute(
+            select(DailyRollup).where(
+                DailyRollup.metric_id == metric.id,
+                DailyRollup.dimension_values == {}
+            ).order_by(DailyRollup.date)
+        )
+        rollups = rollup_res.scalars().all()
+        df_valid = compute_timeseries_anomaly_signals(metric, rollups)
+        
+        if df_valid is not None and not df_valid.empty:
+            row = df_valid[df_valid["date"] == anomaly.date]
+            if not row.empty:
+                norm_z_val = float(row["norm_z"].values[0])
+                iso_score_val = float(row["isolation_score"].values[0])
 
-                    # Tie-break: if equal or within 1e-6, treat norm_z as dominant
-                    if norm_z_val >= iso_score_val - 1e-6:
-                        # Decay z-score weight
-                        metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight - 0.05))
-                    else:
-                        # Decay isolation weight (increases z_score_weight)
-                        metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight + 0.05))
+                # Tie-break: if equal or within 1e-6, treat norm_z as dominant
+                if norm_z_val >= iso_score_val - 1e-6:
+                    # Decay z-score weight
+                    metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight - 0.05))
+                else:
+                    # Decay isolation weight (increases z_score_weight)
+                    metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight + 0.05))
 
-                    await db.flush()
+                await db.flush()
 
-                    max_date = df_valid["date"].max()
-                    cutoff_date = max_date - timedelta(days=14)
+                max_date = df_valid["date"].max()
+                cutoff_date = max_date - timedelta(days=14)
 
-                    anom_res = await db.execute(
-                        select(Anomaly).where(Anomaly.metric_id == metric.id)
-                    )
-                    metric_anoms = anom_res.scalars().all()
+                anom_res = await db.execute(
+                    select(Anomaly).where(Anomaly.metric_id == metric.id)
+                )
+                metric_anoms = anom_res.scalars().all()
 
-                    w_z = metric.z_score_weight
-                    w_iso = 1.0 - w_z
+                w_z = metric.z_score_weight
+                w_iso = 1.0 - w_z
 
-                    for anom in metric_anoms:
-                        if anom.date >= cutoff_date:
-                            anom_row = df_valid[df_valid["date"] == anom.date]
-                            if not anom_row.empty:
-                                a_norm_z = float(anom_row["norm_z"].values[0])
-                                a_iso_score = float(anom_row["isolation_score"].values[0])
+                for anom in metric_anoms:
+                    if anom.date >= cutoff_date:
+                        anom_row = df_valid[df_valid["date"] == anom.date]
+                        if not anom_row.empty:
+                            a_norm_z = float(anom_row["norm_z"].values[0])
+                            a_iso_score = float(anom_row["isolation_score"].values[0])
 
-                                if len(df_valid) < 30:
-                                    combined = a_norm_z
-                                else:
-                                    combined = w_z * a_norm_z + w_iso * a_iso_score
+                            if len(df_valid) < 30:
+                                combined = a_norm_z
+                            else:
+                                combined = w_z * a_norm_z + w_iso * a_iso_score
 
-                                new_severity = 100.0 / (1.0 + np.exp(-12.0 * (combined - 0.5)))
-                                anom.severity_score = new_severity
+                            new_severity = 100.0 / (1.0 + np.exp(-12.0 * (combined - 0.5)))
+                            anom.severity_score = new_severity
 
     await db.commit()
     await db.refresh(anomaly)
@@ -582,6 +589,7 @@ async def list_global_anomalies(
     db: AsyncSession,
     status_filter: Optional[str] = None,
     metric_id: Optional[int] = None,
+    workspace_id: Optional[int] = None,
     limit: int = 200
 ) -> List[Dict[str, Any]]:
     """
@@ -598,6 +606,9 @@ async def list_global_anomalies(
 
     if metric_id is not None:
         stmt = stmt.where(Anomaly.metric_id == metric_id)
+        
+    if workspace_id is not None:
+        stmt = stmt.where(Metric.workspace_id == workspace_id)
 
     stmt = stmt.order_by(Anomaly.date.desc(), Anomaly.id.desc()).limit(limit)
 

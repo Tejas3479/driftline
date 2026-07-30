@@ -4,7 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.ingestion.models import DirectionGoodEnum, SensitivityEnum, GrainEnum
 
 class MetricCreateSchema(BaseModel):
-    workspace_id: int = 1
     name: str
     unit: Optional[str] = None
     direction_good: DirectionGoodEnum = DirectionGoodEnum.up_is_good

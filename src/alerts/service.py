@@ -38,9 +38,9 @@ async def create_or_update_alert_rule(db: AsyncSession, schema: AlertRuleCreateS
     await db.refresh(rule)
     return rule
 
-async def get_alert_rules(db: AsyncSession, metric_id: Optional[int] = None) -> List[AlertRule]:
-    """Retrieves alert rules, optionally filtered by metric_id."""
-    stmt = select(AlertRule)
+async def get_alert_rules(db: AsyncSession, workspace_id: int, metric_id: Optional[int] = None) -> List[AlertRule]:
+    """Retrieves alert rules, optionally filtered by metric_id and enforced by workspace_id."""
+    stmt = select(AlertRule).join(Metric, AlertRule.metric_id == Metric.id).where(Metric.workspace_id == workspace_id)
     if metric_id is not None:
         stmt = stmt.where(AlertRule.metric_id == metric_id)
     res = await db.execute(stmt)
@@ -145,9 +145,9 @@ async def list_notifications(
     res = await db.execute(stmt)
     return list(res.scalars().all())
 
-async def mark_notification_read(db: AsyncSession, notification_id: int) -> Optional[Notification]:
-    """Marks an in-app notification as read."""
-    res = await db.execute(select(Notification).where(Notification.id == notification_id))
+async def mark_notification_read(db: AsyncSession, notification_id: int, workspace_id: int) -> Optional[Notification]:
+    """Marks an in-app notification as read if it belongs to the workspace."""
+    res = await db.execute(select(Notification).where(Notification.id == notification_id, Notification.workspace_id == workspace_id))
     notification = res.scalar_one_or_none()
     if notification:
         notification.is_read = True

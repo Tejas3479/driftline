@@ -2,7 +2,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_current_user, verify_metric_access
+from src.auth.models import User
 from src.db.session import get_db
 from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema, AccuracyResponseSchema
 from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy
@@ -15,10 +16,12 @@ async def get_metric_forecast_endpoint(
     horizon: int = Query(30, ge=1, le=90, description="Forecast horizon in days (7, 14, or 30)"),
     backend: str = Query("lightgbm", pattern="^(lightgbm|xgboost)$", description="Model backend ('lightgbm' or 'xgboost')"),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Generates p10/p50/p90 quantile forecasts for metric and returns predictions with low_confidence status.
     """
+    await verify_metric_access(id, session, current_user.workspace_id)
     try:
         res = await generate_multi_step_forecast(
             metric_id=id,
@@ -63,10 +66,12 @@ async def get_metric_accuracy_endpoint(
     horizon: int = Query(7, ge=1, le=90, description="Horizon to evaluate accuracy for"),
     backend: str = Query("lightgbm", pattern="^(lightgbm|xgboost)$", description="Model backend ('lightgbm' or 'xgboost')"),
     session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Returns MAPE, MAE, coverage percentage, and evaluation points from forecast_accuracy_log over recent 12 weeks.
     """
+    await verify_metric_access(id, session, current_user.workspace_id)
     try:
         acc_dict = await get_forecast_accuracy(
             metric_id=id,

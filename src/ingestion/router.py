@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.auth.models import User
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import get_current_user, verify_metric_access
 from src.ingestion.schemas import (
     MetricCreateSchema,
     MetricResponseSchema,
@@ -35,11 +35,10 @@ async def create_metric_endpoint(
 async def upload_and_inspect_data_endpoint(
     id: int,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    metric = await service.get_metric(db, id)
-    if not metric:
-        raise HTTPException(status_code=404, detail=f"Metric with id {id} not found.")
+    metric = await verify_metric_access(id, db, current_user.workspace_id)
     
     file_bytes = await file.read()
     result = service.inspect_and_validate_csv(metric, file_bytes)
@@ -54,8 +53,10 @@ async def upload_and_inspect_data_endpoint(
 async def confirm_data_endpoint(
     id: int,
     schema: DataConfirmSchema,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    await verify_metric_access(id, db, current_user.workspace_id)
     try:
         result = await service.confirm_and_persist_observations(db, id, schema)
         return result

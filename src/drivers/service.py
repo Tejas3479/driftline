@@ -17,7 +17,7 @@ from src.drivers.schemas import SegmentContributionSchema, StructuralImportanceS
 logger = logging.getLogger(__name__)
 
 
-async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int) -> Dict[str, Any]:
+async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace_id: int) -> Dict[str, Any]:
     # 1. Fetch anomaly
     anom_stmt = select(Anomaly).where(Anomaly.id == anomaly_id)
     anom_res = await db.execute(anom_stmt)
@@ -29,7 +29,7 @@ async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int) -> Dict[s
     metric_stmt = select(Metric).where(Metric.id == anomaly.metric_id)
     metric_res = await db.execute(metric_stmt)
     metric = metric_res.scalars().first()
-    if not metric:
+    if not metric or metric.workspace_id != workspace_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Metric with id {anomaly.metric_id} not found")
 
     # 3. Fetch total daily rollup on anomaly date
