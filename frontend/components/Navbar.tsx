@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,7 +21,8 @@ import {
 import { useMetricContext } from "./MetricContext";
 import CustomSelect from "./CustomSelect";
 import DataUploadModal from "./DataUploadModal";
-import { useAuth } from "./AuthProvider";
+import { Bell, BellRing, Check } from "lucide-react";
+import { AppNotification, fetchNotifications, markNotificationRead } from "@/app/api";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -29,6 +30,49 @@ export default function Navbar() {
   const { logout, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchNotifications(50).then(setNotifications).catch(console.error);
+  }, [user]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    }
+    if (notificationsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [notificationsOpen]);
+
+  const handleMarkRead = async (id: number) => {
+    try {
+      await markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const formatTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
 
   const isMetricDisabled = !selectedMetricId || metrics.length === 0;
   const metricId = selectedMetricId ?? 1;
@@ -172,14 +216,91 @@ export default function Navbar() {
           })}
           
           {user && (
-            <button
-              onClick={logout}
-              className="relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-red-400 hover:bg-slate-900/50 ml-2"
-              title={`Logged in as ${user.email}`}
-            >
-              <LogOut className="relative z-10 h-3.5 w-3.5" />
-              <span className="relative z-10">Sign Out</span>
-            </button>
+            <div className="flex items-center gap-2 ml-2">
+              {/* Notification Bell */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setNotificationsOpen(!notificationsOpen)}
+                  className="relative p-2 rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50 transition-all focus:outline-none"
+                >
+                  {unreadCount > 0 ? (
+                    <BellRing className="h-4 w-4 animate-pulse text-cyan-400" />
+                  ) : (
+                    <Bell className="h-4 w-4" />
+                  )}
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-crimson-500 shadow-[0_0_8px_rgba(220,38,38,0.8)] border border-slate-950" />
+                  )}
+                </button>
+
+                {/* Notifications Dropdown */}
+                <AnimatePresence>
+                  {notificationsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/95 backdrop-blur-2xl shadow-2xl shadow-cyan-900/10 z-50 overflow-hidden"
+                    >
+                      <div className="p-3 border-b border-slate-800/80 sticky top-0 bg-slate-950/95 backdrop-blur-md z-10 flex items-center justify-between">
+                        <span className="text-sm font-extrabold text-white">Notifications</span>
+                        {unreadCount > 0 && (
+                          <span className="text-[10px] font-bold text-cyan-400 bg-cyan-950/50 px-2 py-0.5 rounded-full border border-cyan-800/50">
+                            {unreadCount} New
+                          </span>
+                        )}
+                      </div>
+                      <div className="divide-y divide-slate-800/50">
+                        {notifications.length === 0 ? (
+                          <div className="p-6 text-center text-slate-500 text-xs font-semibold">
+                            No notifications yet
+                          </div>
+                        ) : (
+                          notifications.map((notif) => (
+                            <div 
+                              key={notif.id}
+                              onClick={() => !notif.is_read && handleMarkRead(notif.id)}
+                              className={`p-3 transition-colors cursor-pointer group flex flex-col gap-1.5 ${
+                                notif.is_read ? 'opacity-60 hover:opacity-100 hover:bg-slate-900/30' : 'bg-slate-900/50 hover:bg-slate-800/60'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className={`text-xs font-bold ${notif.is_read ? 'text-slate-300' : 'text-white'}`}>
+                                  {notif.title}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-500 whitespace-nowrap shrink-0">
+                                  {formatTimeAgo(notif.created_at)}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 leading-relaxed line-clamp-2">
+                                {notif.message}
+                              </p>
+                              {!notif.is_read && (
+                                <div className="flex justify-end mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1">
+                                    <Check className="h-3 w-3" /> Mark read
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <button
+                onClick={logout}
+                className="relative flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-red-400 hover:bg-slate-900/50"
+                title={`Logged in as ${user.email}`}
+              >
+                <LogOut className="relative z-10 h-3.5 w-3.5" />
+                <span className="relative z-10">Sign Out</span>
+              </button>
+            </div>
           )}
         </nav>
 

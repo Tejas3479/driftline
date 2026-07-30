@@ -400,3 +400,33 @@ export async function confirmCsvData(metricId: number, payload: DataConfirmSchem
   return res.json();
 }
 
+export interface AppNotification {
+  id: number;
+  workspace_id: number;
+  metric_id: number;
+  anomaly_id: number;
+  title: string;
+  message: string;
+  severity_score: number;
+  is_read: boolean;
+  created_at: string;
+}
+
+export async function fetchNotifications(limit: number = 50): Promise<AppNotification[]> {
+  const url = `${API_BASE_URL}/notifications?limit=${limit}`;
+  const res = await apiFetch(url, { cache: 'no-store' });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, 'Failed to fetch notifications');
+  }
+  return res.json();
+}
+
+export async function markNotificationRead(id: number): Promise<AppNotification> {
+  const url = `${API_BASE_URL}/notifications/${id}/read`;
+  const res = await apiFetch(url, { method: 'PATCH', cache: 'no-store' });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to mark notification ${id} as read`);
+  }
+  return res.json();
+}
+
