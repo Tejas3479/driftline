@@ -22,7 +22,7 @@ async def get_anomaly_drivers_endpoint(
     return await service.calculate_anomaly_drivers(db, id, current_user.workspace_id)
 
 @router.get("/metrics/{id}/segment-comparison")
-@limiter.limit("60/minute")
+@limiter.limit("10/minute")
 async def get_segment_comparison_endpoint(
     request: Request,
     id: int,
