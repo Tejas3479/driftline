@@ -252,4 +252,5 @@
 ## Session 29: Event-Loop Unblocking for CPU-Heavy ML & Data Ops
 - Offloaded all synchronous Polars/Pandas data processing and Matplotlib PDF rendering to the Starlette/asyncio threadpool (`asyncio.to_thread`) across ingestion, anomalies, drivers, forecasting, and digests services.
 - Prevented large metrics (taking 5-30+ seconds for ML training or dataframe interpolation) from blocking concurrent HTTP requests during anomaly detection, CatBoost structural importance training, LightGBM forecasting, and PDF digest generation.
-- Next session context: Application backend is fully non-blocking under heavy CPU load.
+- Added explicit SQLAlchemy connection pool limits (`pool_size=20`, `max_overflow=10`, `pool_timeout=30`) configured via environment variables to prevent PostgreSQL connection exhaustion under heavy concurrent load.
+- Next session context: Application backend is fully non-blocking under heavy CPU load, with protected database connection limits.

@@ -19,7 +19,10 @@ if "@localhost:" in DATABASE_URL:
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    future=True
+    future=True,
+    pool_size=int(os.getenv("DB_POOL_SIZE", 20)),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", 10)),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", 30))
 )
 
 AsyncSessionLocal = async_sessionmaker(
