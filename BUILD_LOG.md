@@ -259,4 +259,5 @@
 - Replaced anti-pattern `catch (err: any)` with strongly typed `catch (e: unknown)` blocks across 9 frontend files (`settings/page.tsx`, `metrics/[id]/page.tsx`, `anomalies/page.tsx`, etc.), enforcing proper type-guards (`e instanceof Error`).
 - Added `@field_validator` to `DigestResponseSchema.pdf_path` in `src/digests/schemas.py` to extract only the file basename, preventing full filesystem path disclosure in API responses.
 - Enforced a transaction rollback pattern in `tests/conftest.py` using `test_engine.connect()`, `conn.begin()`, and `join_transaction_mode="create_savepoint"`. This completely prevents test pollution in the live development database by rolling back all data mutations at the end of each test.
-- Next session context: Application backend is fully non-blocking under heavy CPU load, with protected database connection limits, and strictly aligned frontend API contracts.
+- Patched a critical security flaw in `src/auth/security.py` by extracting the hardcoded `SECRET_KEY` into an `os.getenv` call, aligning it with best practices for production JWT signing. Added it to `.env.example`.
+- Next session context: Application backend is fully non-blocking under heavy CPU load, with protected database connection limits, strictly aligned frontend API contracts, and secured JWT handling.
