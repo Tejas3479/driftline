@@ -254,4 +254,5 @@
 - Prevented large metrics (taking 5-30+ seconds for ML training or dataframe interpolation) from blocking concurrent HTTP requests during anomaly detection, CatBoost structural importance training, LightGBM forecasting, and PDF digest generation.
 - Added explicit SQLAlchemy connection pool limits (`pool_size=20`, `max_overflow=10`, `pool_timeout=30`) configured via environment variables to prevent PostgreSQL connection exhaustion under heavy concurrent load.
 - Re-aligned frontend `Metric` interface in `frontend/app/api.ts` with backend `MetricResponseSchema` by adding missing `structural_importance: StructuralImportance[]` array and making `z_score_weight` required.
+- Hardened backend `MetricResponseSchema.structural_importance` type in `src/ingestion/schemas.py` from a bare `List[dict]` to `List[StructuralImportanceSchema]` for strict type safety.
 - Next session context: Application backend is fully non-blocking under heavy CPU load, with protected database connection limits, and strictly aligned frontend API contracts.

@@ -15,6 +15,8 @@ class MetricUpdateSchema(BaseModel):
     direction_good: Optional[DirectionGoodEnum] = None
     z_score_weight: Optional[float] = Field(None, ge=0.0, le=1.0)
 
+from src.drivers.schemas import StructuralImportanceSchema
+
 class MetricResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -26,7 +28,7 @@ class MetricResponseSchema(BaseModel):
     sensitivity: SensitivityEnum
     grain: GrainEnum
     z_score_weight: float
-    structural_importance: List[dict]
+    structural_importance: List[StructuralImportanceSchema]
     created_at: datetime
 
 class ColumnMappingSchema(BaseModel):
