@@ -1,6 +1,7 @@
 import asyncio
 import io
 import json
+import structlog
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Set
 import pandas as pd
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.models import Workspace
 from src.ingestion.models import Metric, DimensionDef, Observation, DirectionGoodEnum, GrainEnum
 from src.ingestion.schemas import MetricCreateSchema, DataConfirmSchema
+
+logger = structlog.get_logger(__name__)
 
 DATE_FORMATS = [
     "%Y-%m-%d",

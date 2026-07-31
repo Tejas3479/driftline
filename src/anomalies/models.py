@@ -2,7 +2,7 @@ import enum
 from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import String, Date, Float, Text, DateTime, ForeignKey, Index, Enum as SQLEnum, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from src.db.base import Base
 
@@ -30,6 +30,9 @@ class DailyRollup(Base):
     residual: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     dimension_values: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default='{}')
 
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="daily_rollups", lazy="raise")
+
     __table_args__ = (
         Index("ix_daily_rollups_metric_date", "metric_id", "date"),
         Index("uq_daily_rollups_metric_date_dims", "metric_id", "date", "dimension_values", unique=True),
@@ -53,6 +56,17 @@ class Anomaly(Base):
     )
     explanation_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="anomalies", lazy="raise")
+    drivers: Mapped[list["AnomalyDriver"]] = relationship(
+        "AnomalyDriver", back_populates="anomaly", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    notification: Mapped[Optional["Notification"]] = relationship(
+        "Notification", back_populates="anomaly", uselist=False, lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
 
     __table_args__ = (
         Index("ix_anomalies_metric_date", "metric_id", "date"),

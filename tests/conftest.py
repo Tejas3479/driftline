@@ -1,3 +1,7 @@
+import os
+os.environ["ENABLE_TELEMETRY"] = "false"
+os.environ["TESTING"] = "true"
+
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
@@ -42,3 +46,13 @@ async def override_db_dependency():
             await trans.rollback()
             
     await test_engine.dispose()
+
+@pytest.fixture
+async def db() -> AsyncSession:
+    db_gen = app.dependency_overrides[get_db]()
+    session = await anext(db_gen)
+    try:
+        yield session
+    finally:
+        pass
+

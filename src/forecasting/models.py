@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import String, Date, Float, Integer, Boolean, DateTime, ForeignKey, Index, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 
 class Forecast(Base):
@@ -19,6 +19,9 @@ class Forecast(Base):
     p90: Mapped[float] = mapped_column(Float, nullable=False)
     model_version: Mapped[str] = mapped_column(String(100), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="forecasts", lazy="raise")
 
     __table_args__ = (
         Index("ix_forecasts_metric_date", "metric_id", "forecast_date"),
@@ -42,6 +45,9 @@ class ForecastAccuracyLog(Base):
     in_bounds: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     used_ml_model: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true", default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="forecast_accuracy_logs", lazy="raise")
 
     __table_args__ = (
         Index("ix_forecast_accuracy_metric_date", "metric_id", "date"),

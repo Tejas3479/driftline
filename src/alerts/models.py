@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Dict
 from sqlalchemy import String, Float, Text, Boolean, DateTime, ForeignKey, Index, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 
 class AlertRule(Base):
@@ -12,6 +12,9 @@ class AlertRule(Base):
     metric_id: Mapped[int] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False, unique=True)
     min_severity: Mapped[float] = mapped_column(Float, nullable=False)
     channels: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="alert_rule", lazy="raise")
 
 
 
@@ -27,6 +30,10 @@ class Notification(Base):
     severity_score: Mapped[float] = mapped_column(Float, nullable=False)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="notifications", lazy="raise")
+    anomaly: Mapped["Anomaly"] = relationship("Anomaly", back_populates="notification", lazy="raise")
 
     __table_args__ = (
         Index("ix_notifications_workspace_created", "workspace_id", "created_at"),

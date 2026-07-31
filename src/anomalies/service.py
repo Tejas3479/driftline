@@ -1,4 +1,5 @@
 import asyncio
+import structlog
 import json
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -11,6 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.ingestion.models import Metric, DimensionDef, Observation
 from src.anomalies.models import DailyRollup, Anomaly, AnomalyTypeEnum, AnomalyStatusEnum
 from src.anomalies.schemas import TimeseriesPointSchema
+from src.alerts.service import evaluate_and_trigger_alerts_for_metric
+
+logger = structlog.get_logger(__name__)
 
 def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -431,6 +435,10 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
         )
         await db.execute(upsert_stmt, upsert_values)
         await db.commit()
+
+    # Trigger notifications
+    if upsert_values:
+        await evaluate_and_trigger_alerts_for_metric(db, metric_id)
 
 async def get_anomalies(
     db: AsyncSession,

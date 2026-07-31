@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any, Dict, Optional
 from sqlalchemy import String, Date, Float, DateTime, ForeignKey, Index, Enum as SQLEnum, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 
 class DirectionGoodEnum(str, enum.Enum):
@@ -33,12 +33,49 @@ class Metric(Base):
     structural_importance: Mapped[list] = mapped_column(JSONB, default=list, server_default='[]', nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="metrics", lazy="raise")
+    dimension_defs: Mapped[list["DimensionDef"]] = relationship(
+        "DimensionDef", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    observations: Mapped[list["Observation"]] = relationship(
+        "Observation", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    daily_rollups: Mapped[list["DailyRollup"]] = relationship(
+        "DailyRollup", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    anomalies: Mapped[list["Anomaly"]] = relationship(
+        "Anomaly", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    forecasts: Mapped[list["Forecast"]] = relationship(
+        "Forecast", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    forecast_accuracy_logs: Mapped[list["ForecastAccuracyLog"]] = relationship(
+        "ForecastAccuracyLog", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    alert_rule: Mapped[Optional["AlertRule"]] = relationship(
+        "AlertRule", back_populates="metric", uselist=False, lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+    digests: Mapped[list["Digest"]] = relationship(
+        "Digest", back_populates="metric", lazy="raise",
+        cascade="all, delete-orphan", passive_deletes=True
+    )
 class DimensionDef(Base):
     __tablename__ = "dimension_defs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     metric_id: Mapped[int] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="dimension_defs", lazy="raise")
 
 class Observation(Base):
     __tablename__ = "observations"
@@ -48,6 +85,9 @@ class Observation(Base):
     date: Mapped[date] = mapped_column(Date, nullable=False)
     dimension_values: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     value: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Relationships
+    metric: Mapped["Metric"] = relationship("Metric", back_populates="observations", lazy="raise")
 
     __table_args__ = (
         Index("ix_observations_metric_date", "metric_id", "date"),

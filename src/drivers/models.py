@@ -1,5 +1,5 @@
 from sqlalchemy import String, Float, Integer, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 
 class AnomalyDriver(Base):
@@ -12,3 +12,6 @@ class AnomalyDriver(Base):
     contribution_value: Mapped[float] = mapped_column(Float, nullable=False)
     contribution_pct: Mapped[float] = mapped_column(Float, nullable=False)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Relationships
+    anomaly: Mapped["Anomaly"] = relationship("Anomaly", back_populates="drivers", lazy="raise")

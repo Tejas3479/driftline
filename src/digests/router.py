@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from src.auth.dependencies import get_current_user, verify_metric_access
 from src.auth.models import User
 from fastapi.responses import FileResponse
@@ -9,11 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.digests.schemas import DigestResponseSchema, DigestGenerateRequestSchema
 from src.digests.service import generate_weekly_digest, get_digest_by_id, list_digests
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)], tags=["digests"])
 
 @router.get("/digests/{id}")
+@limiter.limit("30/minute")
 async def get_digest_pdf_endpoint(
+    request: Request,
     id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -37,7 +40,9 @@ async def get_digest_pdf_endpoint(
     )
 
 @router.get("/digests", response_model=List[DigestResponseSchema])
+@limiter.limit("30/minute")
 async def list_digests_endpoint(
+    request: Request,
     metric_id: Optional[int] = Query(None, description="Optional metric ID filter"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -47,7 +52,9 @@ async def list_digests_endpoint(
     return [DigestResponseSchema.model_validate(d) for d in digests]
 
 @router.post("/digests/generate", response_model=DigestResponseSchema, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def generate_digest_endpoint(
+    request: Request,
     payload: DigestGenerateRequestSchema,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)

@@ -14,7 +14,7 @@ from src.anomalies.models import Anomaly, DailyRollup
 from src.drivers.service import calculate_anomaly_drivers, train_and_persist_structural_importance
 
 @pytest.mark.asyncio
-async def test_driver_mathematical_invariant():
+async def test_driver_mathematical_invariant(db: AsyncSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Create metric with direction up_is_good
         metric_res = await client.post("/metrics", json={
@@ -52,9 +52,8 @@ async def test_driver_mathematical_invariant():
         # Query rollups on day 35 (date 2026-02-05)
         target_date = start_d + timedelta(days=35)
         
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        session = db
+        if True:
             # Fetch total rollup
             tot_res = await session.execute(
                 select(DailyRollup).where(
@@ -95,10 +94,9 @@ async def test_driver_mathematical_invariant():
             assert len(plan_deltas) == 2
             assert abs(sum(plan_deltas) - total_delta) < 1e-5
 
-        await test_engine.dispose()
 
 @pytest.mark.asyncio
-async def test_driver_young_segment_handling():
+async def test_driver_young_segment_handling(db: AsyncSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         metric_res = await client.post("/metrics", json={
             "name": "Young Segment Metric",
@@ -127,9 +125,8 @@ async def test_driver_young_segment_handling():
             "replace": True
         })
 
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        session = db
+        if True:
             # Query existing anomaly created during ingestion confirmation
             res = await session.execute(select(Anomaly).where(Anomaly.metric_id == metric_id))
             anoms = res.scalars().all()
@@ -146,7 +143,6 @@ async def test_driver_young_segment_handling():
             assert "organic" in segment_vals
             assert "referral" not in segment_vals
 
-        await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_driver_anomaly_injection():
@@ -248,7 +244,7 @@ async def test_explanation_text_direction_flipping():
         assert "(+" not in drv_c["explanation_text"] and "(-" not in drv_c["explanation_text"]
 
 @pytest.mark.asyncio
-async def test_catboost_structural_importance():
+async def test_catboost_structural_importance(db: AsyncSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         metric_res = await client.post("/metrics", json={"name": "CatBoost Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         metric_id = metric_res.json()["id"]
@@ -263,10 +259,8 @@ async def test_catboost_structural_importance():
 
         await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel", "region"], "rows": rows, "replace": True})
 
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-
-        async with async_session() as session:
+        session = db
+        if True:
             # 1. Happy path: train CatBoost
             importance = await train_and_persist_structural_importance(session, metric_id)
             assert len(importance) >= 2
@@ -284,7 +278,6 @@ async def test_catboost_structural_importance():
             cold_importance = await train_and_persist_structural_importance(session, cold_id)
             assert cold_importance == []
 
-        await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_multi_segment_anomalies_explanation():

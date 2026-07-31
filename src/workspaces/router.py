@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Any, List
@@ -10,11 +11,16 @@ from src.db.models import Workspace
 from src.auth.schemas import UserRead
 from src.workspaces.schemas import WorkspaceUserCreate, UserUpdate
 from src.auth.security import get_password_hash
+from src.limiter import limiter
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 @router.get("/me")
+@limiter.limit("30/minute")
 async def get_my_workspace(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
@@ -25,7 +31,9 @@ async def get_my_workspace(
     return workspace
 
 @router.get("/{workspace_id}/users", response_model=List[UserRead])
+@limiter.limit("30/minute")
 async def list_workspace_users(
+    request: Request,
     workspace_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -37,7 +45,9 @@ async def list_workspace_users(
     return res.scalars().all()
 
 @router.post("/{workspace_id}/users", response_model=UserRead)
+@limiter.limit("10/minute")
 async def add_workspace_user(
+    request: Request,
     workspace_id: int,
     user_in: WorkspaceUserCreate,
     current_user: User = Depends(get_current_user),
@@ -66,7 +76,9 @@ async def add_workspace_user(
     return new_user
 
 @router.patch("/users/{user_id}", response_model=UserRead)
+@limiter.limit("10/minute")
 async def update_user_role(
+    request: Request,
     user_id: int,
     update_data: UserUpdate,
     current_user: User = Depends(get_current_user),
@@ -91,7 +103,9 @@ async def update_user_role(
     return target_user
 
 @router.delete("/users/{user_id}")
+@limiter.limit("10/minute")
 async def remove_user(
+    request: Request,
     user_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)

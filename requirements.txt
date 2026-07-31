@@ -25,5 +25,10 @@ bcrypt==3.2.2
 PyJWT>=2.8.0
 python-multipart>=0.0.9
 slowapi>=0.1.9
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-sqlalchemy
+opentelemetry-exporter-otlp>=0.1.9
 structlog>=24.1.0
 asgi-correlation-id>=4.3.1

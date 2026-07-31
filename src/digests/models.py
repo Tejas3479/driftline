@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 from sqlalchemy import String, Date, DateTime, ForeignKey, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base
 
 class Digest(Base):
@@ -14,6 +14,10 @@ class Digest(Base):
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     pdf_path: Mapped[str] = mapped_column(String(512), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="digests", lazy="raise")
+    metric: Mapped[Optional["Metric"]] = relationship("Metric", back_populates="digests", lazy="raise")
 
     __table_args__ = (
         UniqueConstraint("workspace_id", "metric_id", "period_start", "period_end", name="uq_digests_workspace_metric_period"),

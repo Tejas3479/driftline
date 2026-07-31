@@ -17,6 +17,7 @@ from src.digests.router import router as digests_router
 from src.alerts.router import router as alerts_router
 from src.auth.router import router as auth_router
 from src.workspaces.router import router as workspaces_router
+from src.telemetry import setup_telemetry
 from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -28,10 +29,13 @@ import structlog
 setup_logging()
 logger = structlog.get_logger(__name__)
 
-scheduler = AsyncIOScheduler()
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize telemetry
+    setup_telemetry(app, engine)
+
+    scheduler = AsyncIOScheduler()
+
     # Startup: seed default workspace (ID #1) atomically and start AsyncIOScheduler
     try:
         async with AsyncSessionLocal() as session:
