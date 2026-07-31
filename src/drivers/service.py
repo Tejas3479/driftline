@@ -1,6 +1,7 @@
 import logging
 from pydantic import BaseModel
 import structlog
+import asyncio
 from datetime import date, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
@@ -265,35 +266,41 @@ async def train_and_persist_structural_importance(db: AsyncSession, metric_id: i
                 row[k] = str(v) if v is not None else "__unassigned__"
         records.append(row)
 
-    df = pd.DataFrame(records)
     dim_col_list = sorted(list(dimension_cols))
     
-    # Fill missing dimension values for any columns
-    for col in dim_col_list:
-        if col not in df.columns:
-            df[col] = "__unassigned__"
-        else:
-            df[col] = df[col].fillna("__unassigned__")
-
-    feature_cols = ["day_of_week", "trend_index"] + dim_col_list
-    cat_cols = dim_col_list
-
-    if df["value"].nunique() <= 1:
-        logger.info(f"Skipping CatBoost structural importance for metric {metric_id}: target values are constant.")
-        return metric.structural_importance or []
-
     try:
         async with db.begin_nested():
-            train_pool = Pool(
-                data=df[feature_cols],
-                label=df["value"],
-                cat_features=cat_cols
-            )
+            def _train_catboost():
+                df = pd.DataFrame(records)
+                
+                # Fill missing dimension values for any columns
+                for col in dim_col_list:
+                    if col not in df.columns:
+                        df[col] = "__unassigned__"
+                    else:
+                        df[col] = df[col].fillna("__unassigned__")
 
-            model = CatBoostRegressor(iterations=300, verbose=False)
-            model.fit(train_pool)
+                feature_cols = ["day_of_week", "trend_index"] + dim_col_list
+                cat_cols = dim_col_list
 
-            imp_df = model.get_feature_importance(train_pool, type='PredictionValuesChange', prettified=True)
+                if df["value"].nunique() <= 1:
+                    return None
+
+                train_pool = Pool(
+                    data=df[feature_cols],
+                    label=df["value"],
+                    cat_features=cat_cols
+                )
+
+                model = CatBoostRegressor(iterations=300, verbose=False)
+                model.fit(train_pool)
+
+                return model.get_feature_importance(train_pool, type='PredictionValuesChange', prettified=True)
+
+            imp_df = await asyncio.to_thread(_train_catboost)
+            if imp_df is None:
+                logger.info(f"Skipping CatBoost structural importance for metric {metric_id}: target values are constant.")
+                return metric.structural_importance or []
 
             structural_results = []
             for _, row in imp_df.iterrows():

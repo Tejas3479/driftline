@@ -1,5 +1,6 @@
 import json
 import structlog
+import asyncio
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -245,21 +246,25 @@ async def generate_multi_step_forecast(
     if len(total_rollups) == 0:
         raise ValueError(f"Metric {metric_id} has 0 days of rollup history.")
         
-    df_total = pd.DataFrame([
-        {
-            "date": pd.to_datetime(r.date),
-            "value": float(r.value_total),
-            "trend": float(r.trend) if r.trend is not None else np.nan,
-        }
-        for r in total_rollups
-    ]).set_index("date").sort_index()
-    
-    full_idx = pd.date_range(start=df_total.index.min(), end=df_total.index.max(), freq="D")
-    df_total = df_total.reindex(full_idx)
-    df_total["value"] = df_total["value"].interpolate(method="linear").bfill().ffill()
+    def _prep_total_df():
+        df = pd.DataFrame([
+            {
+                "date": pd.to_datetime(r.date),
+                "value": float(r.value_total),
+                "trend": float(r.trend) if r.trend is not None else np.nan,
+            }
+            for r in total_rollups
+        ]).set_index("date").sort_index()
+        
+        f_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq="D")
+        df = df.reindex(f_idx)
+        df["value"] = df["value"].interpolate(method="linear").bfill().ffill()
+        return df, f_idx
+
+    df_total, full_idx = await asyncio.to_thread(_prep_total_df)
     
     if "trend" not in df_total.columns or df_total["trend"].isnull().all():
-        df_total = decompose_timeseries(df_total)
+        df_total = await asyncio.to_thread(decompose_timeseries, df_total)
         
     as_of_date = df_total.index.max().date()
     history_len = len(df_total)
@@ -321,7 +326,9 @@ async def generate_multi_step_forecast(
         X_total = build_forecasting_features(df_total)
         y_total = df_total["value"]
         
-        model_p10, model_p50, model_p90 = train_quantile_models(X_total, y_total, model_backend=model_backend)
+        model_p10, model_p50, model_p90 = await asyncio.to_thread(
+            train_quantile_models, X_total, y_total, model_backend
+        )
         
         last_14_trends = df_total["trend"].dropna().tail(14)
         if len(last_14_trends) >= 2:
@@ -407,22 +414,26 @@ async def generate_multi_step_forecast(
                 }
                 continue
                 
-            df_seg = pd.DataFrame([
-                {
-                    "date": pd.to_datetime(r.date),
-                    "value": float(r.value_total),
-                    "trend": float(r.trend) if r.trend is not None else np.nan,
-                }
-                for r in s_rollups
-            ]).set_index("date").sort_index()
-            
-            df_seg = df_seg.reindex(full_idx)
-            df_seg["value"] = df_seg["value"].interpolate(method="linear").bfill().ffill()
-            
-            X_seg = build_forecasting_features(df_seg)
-            y_seg = df_seg["value"]
-            
-            s_m10, s_m50, s_m90 = train_quantile_models(X_seg, y_seg, model_backend=model_backend)
+            def _prep_and_train_seg():
+                df = pd.DataFrame([
+                    {
+                        "date": pd.to_datetime(r.date),
+                        "value": float(r.value_total),
+                        "trend": float(r.trend) if r.trend is not None else np.nan,
+                    }
+                    for r in s_rollups
+                ]).set_index("date").sort_index()
+                
+                df = df.reindex(full_idx)
+                df["value"] = df["value"].interpolate(method="linear").bfill().ffill()
+                
+                X_s = build_forecasting_features(df)
+                y_s = df["value"]
+                
+                sm10, sm50, sm90 = train_quantile_models(X_s, y_s, model_backend)
+                return df, sm10, sm50, sm90
+                
+            df_seg, s_m10, s_m50, s_m90 = await asyncio.to_thread(_prep_and_train_seg)
             
             seg_history_vals = list(df_seg["value"].values)
             seg_forecasts: Dict[date, Dict[str, float]] = {}

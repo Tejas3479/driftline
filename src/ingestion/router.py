@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,7 +74,7 @@ async def upload_and_inspect_data_endpoint(
     metric = await verify_metric_access(id, db, current_user.workspace_id)
     
     file_bytes = await file.read()
-    result = service.inspect_and_validate_csv(metric, file_bytes)
+    result = await asyncio.to_thread(service.inspect_and_validate_csv, metric, file_bytes)
     return {
         "metric_id": id,
         "inferred_mapping": result["inferred_mapping"],

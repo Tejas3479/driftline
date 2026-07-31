@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 from datetime import date, datetime, timedelta
@@ -320,11 +321,21 @@ async def confirm_and_persist_observations(
                 existing_dim_names.add(dim_name)
         await db.flush()
 
-    # 2. Build Polars DataFrame from incoming rows
-    pl_df = pl.DataFrame(schema.rows)
+    # 2. Process incoming rows to standard dictionaries (offloaded from event loop)
+    def _process_incoming():
+        _pl_df = pl.DataFrame(schema.rows)
+        _pd_df = pd.DataFrame(_pl_df.to_dicts())
+        processed = []
+        for _, row in _pd_df.iterrows():
+            d_val = parse_date_str(row.get(schema.date_col))
+            if d_val is None:
+                continue
+            val = float(row.get(schema.value_col))
+            dim_vals = {col: str(row.get(col, "")).strip() for col in schema.dimension_cols if col in row}
+            processed.append({"date": d_val, "value": val, "dimension_values": dim_vals})
+        return processed
 
-    # 3. Step 4: Convert Polars -> Pandas right before DB operations
-    pd_df = pd.DataFrame(pl_df.to_dicts())
+    incoming_rows = await asyncio.to_thread(_process_incoming)
 
     inserted_count = 0
     updated_count = 0
@@ -335,18 +346,13 @@ async def confirm_and_persist_observations(
         await db.flush()
 
         new_obs_list = []
-        for _, row in pd_df.iterrows():
-            d_val = parse_date_str(row.get(schema.date_col))
-            val = float(row.get(schema.value_col))
-            dim_vals = {col: str(row.get(col, "")).strip() for col in schema.dimension_cols if col in row}
-
-            if d_val is not None:
-                new_obs_list.append(Observation(
-                    metric_id=metric_id,
-                    date=d_val,
-                    dimension_values=dim_vals,
-                    value=val
-                ))
+        for row in incoming_rows:
+            new_obs_list.append(Observation(
+                metric_id=metric_id,
+                date=row["date"],
+                dimension_values=row["dimension_values"],
+                value=row["value"]
+            ))
         db.add_all(new_obs_list)
         inserted_count = len(new_obs_list)
     else:
@@ -363,12 +369,10 @@ async def confirm_and_persist_observations(
 
         existing_lookup = {make_key(obs.date, obs.dimension_values): obs for obs in existing_obs_list}
 
-        for _, row in pd_df.iterrows():
-            d_val = parse_date_str(row.get(schema.date_col))
-            if d_val is None:
-                continue
-            val = float(row.get(schema.value_col))
-            dim_vals = {col: str(row.get(col, "")).strip() for col in schema.dimension_cols if col in row}
+        for row in incoming_rows:
+            d_val = row["date"]
+            val = row["value"]
+            dim_vals = row["dimension_values"]
 
             key = make_key(d_val, dim_vals)
             if key in existing_lookup:

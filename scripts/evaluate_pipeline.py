@@ -132,7 +132,7 @@ async def run_pipeline_evaluation(session: Optional[AsyncSession] = None) -> Dic
     print("[4/6] Running driver analysis & CatBoost structural importance...")
     for anomaly in detected_anomalies:
         try:
-            driver_data = await calculate_anomaly_drivers(db, anomaly.id)
+            driver_data = await calculate_anomaly_drivers(db, anomaly.id, workspace_id=1)
             anomaly.explanation_text = driver_data["explanation_text"]
         except Exception as e:
             print(f"      [!] Driver analysis skipped for anomaly on {anomaly.date}: {e}")
@@ -193,7 +193,7 @@ async def run_pipeline_evaluation(session: Optional[AsyncSession] = None) -> Dic
         driver_explanation = ""
         if ev_type != "level_shift":
             if is_detected and primary_anom is not None:
-                driver_data = await calculate_anomaly_drivers(db, primary_anom.id)
+                driver_data = await calculate_anomaly_drivers(db, primary_anom.id, workspace_id=1)
                 expected_dim = ev["affected_dimension"]
                 expected_target = ev.get(f"affected_{expected_dim}")
                 

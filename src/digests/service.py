@@ -117,93 +117,97 @@ async def generate_weekly_digest(
     os.makedirs(STORAGE_DIR, exist_ok=True)
     pdf_path = os.path.join(STORAGE_DIR, f"digest_{metric_id}_{period_start.isoformat()}_{period_end.isoformat()}.pdf")
 
-    fig = plt.figure(figsize=(8.5, 11), dpi=150)
-    fig.patch.set_facecolor('#ffffff')
+    def _render_pdf():
+        fig = plt.figure(figsize=(8.5, 11), dpi=150)
+        fig.patch.set_facecolor('#ffffff')
 
-    # Grid layout: Title (top), Big Numbers (middle top), Anomaly/Driver (middle), Forecast Plot (bottom)
-    gs = fig.add_gridspec(4, 1, height_ratios=[1.2, 1.8, 1.8, 4.2], hspace=0.4)
+        # Grid layout: Title (top), Big Numbers (middle top), Anomaly/Driver (middle), Forecast Plot (bottom)
+        gs = fig.add_gridspec(4, 1, height_ratios=[1.2, 1.8, 1.8, 4.2], hspace=0.4)
 
-    # Panel 1: Header Banner
-    ax0 = fig.add_subplot(gs[0])
-    ax0.axis('off')
-    ax0.text(0.0, 0.75, "DRIFTLINE METRIC DIGEST", fontsize=18, fontweight='bold', color='#1e293b')
-    unit_str = f" ({metric.unit})" if metric.unit else ""
-    ax0.text(0.0, 0.40, f"Metric: {metric.name}{unit_str}", fontsize=14, fontweight='bold', color='#0f766e')
-    ax0.text(0.0, 0.10, f"Period Covered: {period_start.isoformat()} to {period_end.isoformat()} (Workspace #{workspace_id})", fontsize=11, color='#64748b')
-    ax0.axhline(0.0, color='#cbd5e1', linewidth=1.5)
+        # Panel 1: Header Banner
+        ax0 = fig.add_subplot(gs[0])
+        ax0.axis('off')
+        ax0.text(0.0, 0.75, "DRIFTLINE METRIC DIGEST", fontsize=18, fontweight='bold', color='#1e293b')
+        unit_str = f" ({metric.unit})" if metric.unit else ""
+        ax0.text(0.0, 0.40, f"Metric: {metric.name}{unit_str}", fontsize=14, fontweight='bold', color='#0f766e')
+        ax0.text(0.0, 0.10, f"Period Covered: {period_start.isoformat()} to {period_end.isoformat()} (Workspace #{workspace_id})", fontsize=11, color='#64748b')
+        ax0.axhline(0.0, color='#cbd5e1', linewidth=1.5)
 
-    # Panel 2: Big Number Summary Card
-    ax1 = fig.add_subplot(gs[1])
-    ax1.axis('off')
-    ax1.add_patch(plt.Rectangle((0, 0), 1, 1, transform=ax1.transAxes, facecolor='#f8fafc', edgecolor='#e2e8f0'))
-    
-    ax1.text(0.05, 0.70, "PERIOD TOTAL VALUE", fontsize=9, fontweight='bold', color='#64748b', transform=ax1.transAxes)
-    ax1.text(0.05, 0.30, f"{period_total:,.1f}", fontsize=24, fontweight='bold', color='#0f172a', transform=ax1.transAxes)
-
-    ax1.text(0.45, 0.70, "CHANGE VS PRIOR WEEK", fontsize=9, fontweight='bold', color='#64748b', transform=ax1.transAxes)
-    change_color = '#16a34a' if '+$' in change_str or '+' in change_str else ('#dc2626' if '-' in change_str else '#0f172a')
-    ax1.text(0.45, 0.30, change_str, fontsize=14, fontweight='bold', color=change_color, transform=ax1.transAxes)
-
-    ax1.text(0.75, 0.70, "PRIOR WEEK TOTAL", fontsize=9, fontweight='bold', color='#64748b', transform=ax1.transAxes)
-    ax1.text(0.75, 0.30, f"{prior_period_total:,.1f}", fontsize=14, fontweight='bold', color='#475569', transform=ax1.transAxes)
-
-    # Panel 3: Anomaly & Driver Explanation Card
-    ax2 = fig.add_subplot(gs[2])
-    ax2.axis('off')
-    ax2.add_patch(plt.Rectangle((0, 0), 1, 1, transform=ax2.transAxes, facecolor='#f8fafc', edgecolor='#cbd5e1'))
-    
-    ax2.text(0.05, 0.80, "ANOMALY & ROOT-CAUSE DRIVER SUMMARY", fontsize=10, fontweight='bold', color='#1e293b', transform=ax2.transAxes)
-    
-    # Wrap explanation text for clean card rendering
-    words = anomaly_summary.split()
-    lines = []
-    curr_line = []
-    for w in words:
-        curr_line.append(w)
-        if len(" ".join(curr_line)) > 75:
-            lines.append(" ".join(curr_line[:-1]))
-            curr_line = [w]
-    if curr_line:
-        lines.append(" ".join(curr_line))
-    
-    wrapped_text = "\n".join(lines[:3])
-    ax2.text(0.05, 0.25, wrapped_text, fontsize=9.5, color='#334155', transform=ax2.transAxes, verticalalignment='top')
-
-    # Panel 4: Forecast & Accuracy Chart
-    ax3 = fig.add_subplot(gs[3])
-    
-    hist_dates = [r.date for r in recent_rollups]
-    hist_vals = [r.value_total for r in recent_rollups]
-    
-    ax3.plot(hist_dates, hist_vals, color='#2563eb', linewidth=2, label='Actual Values')
-    
-    if forecasts:
-        fc_dates = [f.forecast_date for f in forecasts]
-        fc_p50 = [f.p50 for f in forecasts]
-        fc_p10 = [f.p10 for f in forecasts]
-        fc_p90 = [f.p90 for f in forecasts]
+        # Panel 2: Big Number Summary Card
+        ax1 = fig.add_subplot(gs[1])
+        ax1.axis('off')
+        ax1.add_patch(plt.Rectangle((0, 0), 1, 1, transform=ax1.transAxes, facecolor='#f8fafc', edgecolor='#e2e8f0'))
         
-        # Connect last actual point to first forecast point for smooth continuity
-        if hist_dates:
-            conn_dates = [hist_dates[-1]] + fc_dates
-            conn_p50 = [hist_vals[-1]] + fc_p50
-            conn_p10 = [hist_vals[-1]] + fc_p10
-            conn_p90 = [hist_vals[-1]] + fc_p90
-        else:
-            conn_dates, conn_p50, conn_p10, conn_p90 = fc_dates, fc_p50, fc_p10, fc_p90
+        ax1.text(0.05, 0.70, "PERIOD TOTAL VALUE", fontsize=9, fontweight='bold', color='#64748b', transform=ax1.transAxes)
+        ax1.text(0.05, 0.30, f"{period_total:,.1f}", fontsize=24, fontweight='bold', color='#0f172a', transform=ax1.transAxes)
+
+        ax1.text(0.45, 0.70, "CHANGE VS PRIOR WEEK", fontsize=9, fontweight='bold', color='#64748b', transform=ax1.transAxes)
+        change_color = '#16a34a' if '+$' in change_str or '+' in change_str else ('#dc2626' if '-' in change_str else '#0f172a')
+        ax1.text(0.45, 0.30, change_str, fontsize=14, fontweight='bold', color=change_color, transform=ax1.transAxes)
+
+        ax1.text(0.75, 0.70, "PRIOR WEEK TOTAL", fontsize=9, fontweight='bold', color='#64748b', transform=ax1.transAxes)
+        ax1.text(0.75, 0.30, f"{prior_period_total:,.1f}", fontsize=14, fontweight='bold', color='#475569', transform=ax1.transAxes)
+
+        # Panel 3: Anomaly & Driver Explanation Card
+        ax2 = fig.add_subplot(gs[2])
+        ax2.axis('off')
+        ax2.add_patch(plt.Rectangle((0, 0), 1, 1, transform=ax2.transAxes, facecolor='#f8fafc', edgecolor='#cbd5e1'))
+        
+        ax2.text(0.05, 0.80, "ANOMALY & ROOT-CAUSE DRIVER SUMMARY", fontsize=10, fontweight='bold', color='#1e293b', transform=ax2.transAxes)
+        
+        # Wrap explanation text for clean card rendering
+        words = anomaly_summary.split()
+        lines = []
+        curr_line = []
+        for w in words:
+            curr_line.append(w)
+            if len(" ".join(curr_line)) > 75:
+                lines.append(" ".join(curr_line[:-1]))
+                curr_line = [w]
+        if curr_line:
+            lines.append(" ".join(curr_line))
+        
+        wrapped_text = "\n".join(lines[:3])
+        ax2.text(0.05, 0.25, wrapped_text, fontsize=9.5, color='#334155', transform=ax2.transAxes, verticalalignment='top')
+
+        # Panel 4: Forecast & Accuracy Chart
+        ax3 = fig.add_subplot(gs[3])
+        
+        hist_dates = [r.date for r in recent_rollups]
+        hist_vals = [r.value_total for r in recent_rollups]
+        
+        ax3.plot(hist_dates, hist_vals, color='#2563eb', linewidth=2, label='Actual Values')
+        
+        if forecasts:
+            fc_dates = [f.forecast_date for f in forecasts]
+            fc_p50 = [f.p50 for f in forecasts]
+            fc_p10 = [f.p10 for f in forecasts]
+            fc_p90 = [f.p90 for f in forecasts]
             
-        ax3.plot(conn_dates, conn_p50, color='#7c3aed', linestyle='--', linewidth=2, label='Forecast p50 (Median)')
-        ax3.fill_between(conn_dates, conn_p10, conn_p90, color='#8b5cf6', alpha=0.2, label='p10 - p90 Prediction Band')
+            # Connect last actual point to first forecast point for smooth continuity
+            if hist_dates:
+                conn_dates = [hist_dates[-1]] + fc_dates
+                conn_p50 = [hist_vals[-1]] + fc_p50
+                conn_p10 = [hist_vals[-1]] + fc_p10
+                conn_p90 = [hist_vals[-1]] + fc_p90
+            else:
+                conn_dates, conn_p50, conn_p10, conn_p90 = fc_dates, fc_p50, fc_p10, fc_p90
+                
+            ax3.plot(conn_dates, conn_p50, color='#7c3aed', linestyle='--', linewidth=2, label='Forecast p50 (Median)')
+            ax3.fill_between(conn_dates, conn_p10, conn_p90, color='#8b5cf6', alpha=0.2, label='p10 - p90 Prediction Band')
 
-    ax3.set_title(f"30-Day Trend & Forecast (12-Week 7-Day MAPE: {mape_str})", fontsize=11, fontweight='bold', color='#1e293b', pad=10)
-    ax3.set_ylabel("Metric Value", fontsize=9, color='#475569')
-    ax3.tick_params(axis='x', rotation=30, labelsize=8)
-    ax3.tick_params(axis='y', labelsize=8)
-    ax3.grid(True, linestyle=':', alpha=0.6)
-    ax3.legend(loc='upper left', fontsize=8, frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1')
+        ax3.set_title(f"30-Day Trend & Forecast (12-Week 7-Day MAPE: {mape_str})", fontsize=11, fontweight='bold', color='#1e293b', pad=10)
+        ax3.set_ylabel("Metric Value", fontsize=9, color='#475569')
+        ax3.tick_params(axis='x', rotation=30, labelsize=8)
+        ax3.tick_params(axis='y', labelsize=8)
+        ax3.grid(True, linestyle=':', alpha=0.6)
+        ax3.legend(loc='upper left', fontsize=8, frameon=True, facecolor='#ffffff', edgecolor='#cbd5e1')
 
-    fig.savefig(pdf_path, format='pdf', bbox_inches='tight')
-    plt.close(fig)
+        fig.savefig(pdf_path, format='pdf', bbox_inches='tight')
+        plt.close(fig)
+
+    import asyncio
+    await asyncio.to_thread(_render_pdf)
 
     # 8. Idempotent Database Upsert
     stmt = insert(Digest).values(
@@ -271,7 +275,7 @@ async def run_daily_pipeline(
 
             for anomaly in anomalies:
                 try:
-                    driver_data = await calculate_anomaly_drivers(db, anomaly.id)
+                    driver_data = await calculate_anomaly_drivers(db, anomaly.id, workspace_id=w_id)
                     anomaly.explanation_text = driver_data["explanation_text"]
                 except Exception as ex:
                     logger.warning(f"Driver analysis skipped for anomaly #{anomaly.id}: {str(ex)}")

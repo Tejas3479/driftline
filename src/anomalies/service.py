@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -109,22 +110,24 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
 
     for dim_vals, group_obs in timeseries_groups:
         # Group by date and sum value
-        records = []
-        for obs in group_obs:
-            records.append({"date": pd.to_datetime(obs.date), "value": obs.value})
+        records = [{"date": pd.to_datetime(obs.date), "value": obs.value} for obs in group_obs]
         
-        group_df = pd.DataFrame(records)
-        if group_df.empty:
-            continue
+        def _prep_and_decompose():
+            group_df = pd.DataFrame(records)
+            if group_df.empty:
+                return None
+            group_df = group_df.groupby("date")["value"].sum().reset_index()
+            group_df.set_index("date", inplace=True)
             
-        group_df = group_df.groupby("date")["value"].sum().reset_index()
-        group_df.set_index("date", inplace=True)
-        
-        # Reindex to continuous calendar
-        group_df = group_df.reindex(full_date_range)
-        
-        # Decompose
-        decomposed_df = decompose_timeseries(group_df)
+            # Reindex to continuous calendar
+            group_df = group_df.reindex(full_date_range)
+            
+            # Decompose
+            return decompose_timeseries(group_df)
+            
+        decomposed_df = await asyncio.to_thread(_prep_and_decompose)
+        if decomposed_df is None:
+            continue
         
         # Create DailyRollup values
         for d, row in decomposed_df.iterrows():
@@ -308,7 +311,7 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
         return
 
     # Compute z-scores, isolation scores and severity scores
-    df_valid = compute_timeseries_anomaly_signals(metric, rollups)
+    df_valid = await asyncio.to_thread(compute_timeseries_anomaly_signals, metric, rollups)
     if df_valid is None or df_valid.empty:
         return
 
@@ -479,7 +482,7 @@ async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: Ano
             ).order_by(DailyRollup.date)
         )
         rollups = rollup_res.scalars().all()
-        df_valid = compute_timeseries_anomaly_signals(metric, rollups)
+        df_valid = await asyncio.to_thread(compute_timeseries_anomaly_signals, metric, rollups)
         
         if df_valid is not None and not df_valid.empty:
             row = df_valid[df_valid["date"] == anomaly.date]

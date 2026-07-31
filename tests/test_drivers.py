@@ -137,7 +137,7 @@ async def test_driver_young_segment_handling():
             anomaly_id = anoms[0].id
 
             # Call calculate_anomaly_drivers
-            driver_res = await calculate_anomaly_drivers(session, anomaly_id)
+            driver_res = await calculate_anomaly_drivers(session, anomaly_id, workspace_id=1)
             
             # Referral segment has trend=None on day 55 (only 5 days old < 14 min_periods)
             # Assert referral is excluded from ranked_segments

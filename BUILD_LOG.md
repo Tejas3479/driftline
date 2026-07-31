@@ -248,3 +248,8 @@
 - Integrated `deleteMetric` API client method in `frontend/app/api.ts` and added a `framer-motion` styled "Permanently Delete Metric" danger button with confirmation prompts in the Model Health & Settings page (`app/(dashboard)/settings/page.tsx`).
 - Decisions: Relied exclusively on DB-level cascading `ON DELETE CASCADE` to maintain referential integrity. Exposed deletion directly inside the metric settings panel rather than a global list.
 - Next session context: Full CRUD lifecycle for metrics is now complete.
+
+## Session 29: Event-Loop Unblocking for CPU-Heavy ML & Data Ops
+- Offloaded all synchronous Polars/Pandas data processing and Matplotlib PDF rendering to the Starlette/asyncio threadpool (`asyncio.to_thread`) across ingestion, anomalies, drivers, forecasting, and digests services.
+- Prevented large metrics (taking 5-30+ seconds for ML training or dataframe interpolation) from blocking concurrent HTTP requests during anomaly detection, CatBoost structural importance training, LightGBM forecasting, and PDF digest generation.
+- Next session context: Application backend is fully non-blocking under heavy CPU load.
