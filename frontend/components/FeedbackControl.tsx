@@ -32,8 +32,7 @@ export default function FeedbackControl({
         setFeedbackMsg("Recorded as false positive. Decay applied to dominant score weight.");
       } else {
         setFeedbackMsg("Confirmed as reviewed anomaly.");
-      }
-    } catch (err: any) {
+      }} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       console.error("Failed to submit feedback:", err);
       setFeedbackMsg(err.message || "Failed to submit feedback");
     } finally {

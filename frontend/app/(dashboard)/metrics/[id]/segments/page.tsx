@@ -71,8 +71,7 @@ export default function SegmentComparisonPage({ params }: { params: { id: string
         // Extract effective dimension name if not set
         if (!selectedDimension && spec && spec.title) {
           // If dimension wasn't explicitly selected, spec is for default dimension
-        }
-      } catch (err: any) {
+        }} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
         if (err.name === "AbortError") return;
         console.error("Failed to load segment comparison spec:", err);
         setError(err.message || "Failed to load segment comparison data.");

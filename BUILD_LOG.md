@@ -256,4 +256,5 @@
 - Re-aligned frontend `Metric` interface in `frontend/app/api.ts` with backend `MetricResponseSchema` by adding missing `structural_importance: StructuralImportance[]` array and making `z_score_weight` required.
 - Hardened backend `MetricResponseSchema.structural_importance` type in `src/ingestion/schemas.py` from a bare `List[dict]` to `List[StructuralImportanceSchema]` for strict type safety.
 - Aligned `forecasting/router.py` architecture by removing its `APIRouter(prefix="/metrics")` and hardcoding paths in endpoints (`@router.get("/metrics/{id}/...")`) to match `ingestion`, `anomalies`, and `digests` routers for consistent behavior under `main.py` dual-mounting.
+- Replaced anti-pattern `catch (err: any)` with strongly typed `catch (e: unknown)` blocks across 9 frontend files (`settings/page.tsx`, `metrics/[id]/page.tsx`, `anomalies/page.tsx`, etc.), enforcing proper type-guards (`e instanceof Error`).
 - Next session context: Application backend is fully non-blocking under heavy CPU load, with protected database connection limits, and strictly aligned frontend API contracts.

@@ -57,8 +57,7 @@ export default function ModelHealthSettingsPage() {
       });
       await refetchMetrics();
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
+      setTimeout(() => setSaveSuccess(false), 3000);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       setError(err.message || "Failed to save settings");
     } finally {
       setIsSaving(false);
@@ -79,8 +78,7 @@ export default function ModelHealthSettingsPage() {
       setError(null);
       await deleteMetric(currentMetric.id);
       // Let the context handle switching to another metric or showing the empty state
-      await refetchMetrics(); 
-    } catch (err: any) {
+      await refetchMetrics();} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       setError(err.message || "Failed to delete metric");
       setIsDeleting(false);
     }
@@ -105,8 +103,7 @@ export default function ModelHealthSettingsPage() {
         ]);
 
         setAccuracy(accData);
-        setForecast(fcData);
-      } catch (err: any) {
+        setForecast(fcData);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
         if (err.name === "AbortError") return;
         console.error("Failed to load model health data:", err);
         setError(err.message || "Failed to load model health data.");

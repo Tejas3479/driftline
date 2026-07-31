@@ -46,8 +46,7 @@ export default function GlobalAnomalyLogPage() {
           undefined,
           signal
         );
-        setAnomalies(data);
-      } catch (err: any) {
+        setAnomalies(data);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
         if (err.name === "AbortError") return;
         console.error("Failed to load anomalies log:", err);
         setError(err.message || "Failed to load anomaly log.");

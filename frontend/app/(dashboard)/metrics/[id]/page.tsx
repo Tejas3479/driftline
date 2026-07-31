@@ -56,8 +56,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
         const anomList = await fetchAnomalies(metricId);
 
         setTimeseriesData(ts);
-        setAnomalies(anomList);
-      } catch (err: any) {
+        setAnomalies(anomList);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
         console.error("Failed to load metric details:", err);
         setError(err.message || "Failed to load metric details");
       } finally {

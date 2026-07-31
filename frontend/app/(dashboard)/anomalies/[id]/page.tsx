@@ -55,8 +55,7 @@ export default function AnomalyDetailPage({ params }: { params: { id: string } }
 
         // 4. Fetch Total Metric Timeseries initially
         const tsData = await fetchTimeseries(anomData.metric_id);
-        setTimeseries(tsData);
-      } catch (err: any) {
+        setTimeseries(tsData);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
         console.error("Error loading anomaly detail page:", err);
         setError(err.message || "Failed to load anomaly details");
       } finally {

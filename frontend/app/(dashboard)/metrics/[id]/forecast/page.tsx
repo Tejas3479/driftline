@@ -103,8 +103,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
         ]);
 
         setForecastResult(fcRes);
-        setAccuracyResponse(accRes);
-      } catch (err: any) {
+        setAccuracyResponse(accRes);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
         if (err.name === "AbortError") return;
         console.error("Failed to load forecast page data:", err);
         setError(err.message || "Failed to load forecast data.");

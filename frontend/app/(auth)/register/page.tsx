@@ -61,8 +61,7 @@ export default function RegisterPage() {
       });
       const userData = await userResponse.json();
       
-      login(data.access_token, userData);
-    } catch (err: any) {
+      login(data.access_token, userData);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       setError(err.message || "An error occurred. Please try again.");
     } finally {
       setIsLoading(false);

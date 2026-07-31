@@ -25,8 +25,7 @@ export default function TeamManagement() {
     try {
       setLoading(true);
       const data = await fetchTeamMembers(currentUser.workspace_id);
-      setMembers(data);
-    } catch (err: any) {
+      setMembers(data);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       setError(err.message || "Failed to load team members");
     } finally {
       setLoading(false);
@@ -52,8 +51,7 @@ export default function TeamManagement() {
       setIsAddModalOpen(false);
       setNewEmail("");
       setNewPassword("");
-      setNewRole("member");
-    } catch (err: any) {
+      setNewRole("member");} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       setAddError(err.message || "Failed to add member");
     } finally {
       setAddLoading(false);
@@ -63,8 +61,7 @@ export default function TeamManagement() {
   const handleRoleChange = async (userId: number, role: string) => {
     try {
       await updateTeamMemberRole(userId, { role });
-      await loadMembers();
-    } catch (err: any) {
+      await loadMembers();} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       alert(err.message || "Failed to update role");
     }
   };
@@ -74,8 +71,7 @@ export default function TeamManagement() {
     if (!confirmDelete) return;
     try {
       await removeTeamMember(userId);
-      await loadMembers();
-    } catch (err: any) {
+      await loadMembers();} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       alert(err.message || "Failed to remove user");
     }
   };
