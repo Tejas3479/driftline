@@ -9,9 +9,9 @@ from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema, A
 from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy
 from src.limiter import limiter
 
-router = APIRouter(prefix="/metrics", tags=["forecasting"], dependencies=[Depends(get_current_user)])
+router = APIRouter(tags=["forecasting"], dependencies=[Depends(get_current_user)])
 
-@router.get("/{id}/forecast", response_model=ForecastResultSchema)
+@router.get("/metrics/{id}/forecast", response_model=ForecastResultSchema)
 @limiter.limit("5/minute")
 async def get_metric_forecast_endpoint(
     request: Request,
@@ -63,7 +63,7 @@ async def get_metric_forecast_endpoint(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate forecast: {str(e)}")
 
-@router.get("/{id}/accuracy", response_model=AccuracyResponseSchema)
+@router.get("/metrics/{id}/accuracy", response_model=AccuracyResponseSchema)
 @limiter.limit("15/minute")
 async def get_metric_accuracy_endpoint(
     request: Request,
