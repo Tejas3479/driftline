@@ -14,7 +14,8 @@ export interface Metric {
   direction_good: 'up_is_good' | 'down_is_good';
   sensitivity: 'low' | 'medium' | 'high';
   grain: 'daily' | 'weekly';
-  z_score_weight?: number;
+  z_score_weight: number;
+  structural_importance: StructuralImportance[];
   created_at: string;
 }
 
@@ -450,7 +451,7 @@ export interface WorkspaceUserUpdate {
 }
 
 export async function fetchTeamMembers(workspaceId: number): Promise<User[]> {
-  const url = \/workspaces/\/users;
+  const url = `${API_BASE_URL}/workspaces/${workspaceId}/users`;
   const res = await apiFetch(url, { cache: 'no-store' });
   if (!res.ok) {
     throw await parseErrorDetail(res, 'Failed to fetch team members');
@@ -459,7 +460,7 @@ export async function fetchTeamMembers(workspaceId: number): Promise<User[]> {
 }
 
 export async function addTeamMember(workspaceId: number, payload: WorkspaceUserCreate): Promise<User> {
-  const url = \/workspaces/\/users;
+  const url = `${API_BASE_URL}/workspaces/${workspaceId}/users`;
   const res = await apiFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -472,7 +473,7 @@ export async function addTeamMember(workspaceId: number, payload: WorkspaceUserC
 }
 
 export async function updateTeamMemberRole(userId: number, payload: WorkspaceUserUpdate): Promise<User> {
-  const url = \/workspaces/users/\;
+  const url = `${API_BASE_URL}/workspaces/users/${userId}`;
   const res = await apiFetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -485,7 +486,7 @@ export async function updateTeamMemberRole(userId: number, payload: WorkspaceUse
 }
 
 export async function removeTeamMember(userId: number): Promise<void> {
-  const url = \/workspaces/users/\;
+  const url = `${API_BASE_URL}/workspaces/users/${userId}`;
   const res = await apiFetch(url, {
     method: 'DELETE',
   });

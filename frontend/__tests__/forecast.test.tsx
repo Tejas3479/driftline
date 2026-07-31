@@ -55,6 +55,8 @@ describe("Forecast Page & Model Track Record Rendering Suite", () => {
     direction_good: "up_is_good",
     sensitivity: "medium",
     grain: "daily",
+    z_score_weight: 1.0,
+    structural_importance: [],
     created_at: "2026-07-01T00:00:00Z",
   };
 

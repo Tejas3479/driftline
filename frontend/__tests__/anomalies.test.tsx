@@ -39,6 +39,8 @@ describe("Anomaly Detail Page & Driver Component Test Suite", () => {
     direction_good: "up_is_good",
     sensitivity: "medium",
     grain: "daily",
+    z_score_weight: 1.0,
+    structural_importance: [],
     created_at: "2026-07-21T00:00:00Z",
   };
 
