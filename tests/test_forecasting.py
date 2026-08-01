@@ -231,8 +231,6 @@ async def test_xgboost_and_lightgbm_backends():
         assert len(xgb_result["total_forecasts"]) == 7
         for d, f_dict in xgb_result["total_forecasts"].items():
             assert f_dict["p10"] <= f_dict["p50"] <= f_dict["p90"]
-            
-    await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_jsonb_upsert_semantics():
@@ -293,8 +291,6 @@ async def test_jsonb_upsert_semantics():
         count2 = (await db_session.execute(stmt)).scalar()
         # Assert row count remains 7 (upsert updated existing rows, no duplicates created)
         assert count2 == 7
-        
-    await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_backtest_does_not_pollute_live_forecasts_table():
@@ -350,8 +346,6 @@ async def test_backtest_does_not_pollute_live_forecasts_table():
         # Assert live forecasts count is STILL 0 (backtest did NOT pollute live forecasts table)
         count_after = (await db_session.execute(stmt)).scalar()
         assert count_after == 0
-        
-    await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_cold_start_fallback_and_low_confidence_flag():
@@ -434,8 +428,6 @@ async def test_cold_start_fallback_and_low_confidence_flag():
         assert mature_res["model_version"] == "lightgbm-v1"
         for d, f_dict in mature_res["total_forecasts"].items():
             assert f_dict["p10"] <= f_dict["p50"] <= f_dict["p90"]
-            
-    await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_forecast_accuracy_endpoint():

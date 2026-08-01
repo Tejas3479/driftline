@@ -424,5 +424,12 @@ async def delete_metric(db: AsyncSession, metric: Metric) -> None:
     """
     Delete a metric configuration and all related cascading data.
     """
-    await db.delete(metric)
     await db.commit()
+
+async def verify_metric_access(metric_id: int, db: AsyncSession, workspace_id: int) -> Metric:
+    from fastapi import HTTPException
+    res = await db.execute(select(Metric).where(Metric.id == metric_id, Metric.workspace_id == workspace_id))
+    metric = res.scalar_one_or_none()
+    if not metric:
+        raise HTTPException(status_code=404, detail=f"Metric with id {metric_id} not found.")
+    return metric

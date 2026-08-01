@@ -212,6 +212,34 @@ def reconcile_segment_forecasts(
                 
     return reconciled_map
 
+from src.forecasting.schemas import ForecastResultSchema, ForecastPointSchema
+
+def format_forecast_result(metric_id: int, horizon: int, res: Dict[str, Any]) -> ForecastResultSchema:
+    forecast_points = []
+    for target_date, fc_dict in res["total_forecasts"].items():
+        h_day = (target_date - res["as_of_date"]).days
+        forecast_points.append(
+            ForecastPointSchema(
+                metric_id=metric_id,
+                forecast_date=target_date,
+                horizon_days=h_day,
+                p10=fc_dict["p10"],
+                p50=fc_dict["p50"],
+                p90=fc_dict["p90"],
+                dimension_values={},
+                model_version=res["model_version"],
+            )
+        )
+        
+    return ForecastResultSchema(
+        metric_id=metric_id,
+        horizon_days=horizon,
+        as_of_date=res["as_of_date"],
+        model_version=res["model_version"],
+        low_confidence=res["low_confidence"],
+        forecasts=forecast_points,
+    )
+
 async def generate_multi_step_forecast(
     metric_id: int,
     session: AsyncSession,

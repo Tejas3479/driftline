@@ -48,7 +48,13 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
 
         # 3. Inject high severity anomaly (severity 75.0 > 50.0)
         from src.db.session import get_db
+        from src.auth.models import User
         async for session in app.dependency_overrides[get_db]():
+            # Seed mock user so recipient_email lookup passes
+            user = User(workspace_id=1, email="test@example.com", hashed_password="xyz")
+            session.add(user)
+            await session.commit()
+            
             anomaly = Anomaly(
                 metric_id=metric_id,
                 date=date(2026, 3, 1),
@@ -67,7 +73,7 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
             # 4. Mock SMTP email dispatch
             with patch("src.alerts.service.send_immediate_alert_email") as mock_send_email:
                 notifications = await evaluate_and_trigger_alerts_for_metric(session, metric_id)
-
+                
                 assert len(notifications) == 1
                 assert notifications[0].anomaly_id == anomaly_id
                 assert notifications[0].severity_score == 75.0

@@ -1,6 +1,8 @@
 import os
 os.environ["ENABLE_TELEMETRY"] = "false"
 os.environ["TESTING"] = "true"
+os.environ["SECRET_KEY"] = "test_secret_key"
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://driftline:driftline@127.0.0.1:5433/driftline_db"
 
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -44,8 +46,6 @@ async def override_db_dependency():
         finally:
             app.dependency_overrides.clear()
             await trans.rollback()
-            
-    await test_engine.dispose()
 
 @pytest.fixture
 async def db() -> AsyncSession:

@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status,
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db
 from src.auth.models import User
-from src.auth.dependencies import get_current_user, verify_metric_access
+from src.auth.dependencies import get_current_user
+from src.ingestion.service import verify_metric_access
 from src.ingestion.schemas import (
     MetricCreateSchema,
     MetricUpdateSchema,

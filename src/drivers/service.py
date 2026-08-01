@@ -102,6 +102,19 @@ async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace
         dimension_segments[dim_name].append(seg_info)
         valid_segments_all.append(seg_info)
 
+    # Invariant: The sum of segment deltas for any single dimension must equal the total delta
+    tolerance = abs(total_delta) * 0.01 + 1e-6
+    for dim_name, segs in dimension_segments.items():
+        dim_delta_sum = sum(s["delta"] for s in segs)
+        if abs(dim_delta_sum - total_delta) > tolerance:
+            logger.warning(
+                "Segment sum invariant breached",
+                dim_name=dim_name,
+                dim_delta_sum=dim_delta_sum,
+                total_delta=total_delta,
+                diff=abs(dim_delta_sum - total_delta)
+            )
+
     # Sort all valid segments by absolute delta descending for overall ranking
     valid_segments_all.sort(key=lambda x: abs(x["delta"]), reverse=True)
 

@@ -14,6 +14,8 @@ from src.auth.security import get_password_hash, verify_password, create_access_
 from src.auth.dependencies import get_current_user
 from src.limiter import limiter
 
+from src.auth.service import register_user, authenticate_user
+
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -22,30 +24,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @limiter.limit("5/minute")
 async def register(request: Request, user_in: UserCreate, db: AsyncSession = Depends(get_db)) -> Any:
     logger.info("user_registration_attempt", email=user_in.email)
-    # Check if user exists
-    res = await db.execute(select(User).where(User.email == user_in.email))
-    if res.scalar_one_or_none():
+    try:
+        user = await register_user(db, user_in)
+        return user
+    except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail="The user with this email already exists in the system.",
+            detail=str(e),
         )
-    
-    # Always create a new workspace upon registration
-    workspace = Workspace(name=user_in.workspace_name)
-    db.add(workspace)
-    await db.commit()
-    await db.refresh(workspace)
-        
-    user = User(
-        email=user_in.email,
-        hashed_password=get_password_hash(user_in.password),
-        workspace_id=workspace.id,
-        role=user_in.role
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    return user
 
 @router.post("/login", response_model=Token)
 @limiter.limit("10/minute")
@@ -55,9 +41,9 @@ async def login(
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     logger.info("user_login_attempt", email=form_data.username)
-    res = await db.execute(select(User).where(User.email == form_data.username))
-    user = res.scalar_one_or_none()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    user = await authenticate_user(db, form_data.username, form_data.password)
+    
+    if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     elif not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")

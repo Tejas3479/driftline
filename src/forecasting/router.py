@@ -2,11 +2,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.dependencies import get_current_user, verify_metric_access
+from src.auth.dependencies import get_current_user
+from src.ingestion.service import verify_metric_access
 from src.auth.models import User
 from src.db.session import get_db
 from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema, AccuracyResponseSchema
-from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy
+from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy, format_forecast_result
 from src.limiter import limiter
 
 router = APIRouter(tags=["forecasting"], dependencies=[Depends(get_current_user)])
@@ -34,30 +35,7 @@ async def get_metric_forecast_endpoint(
             save_to_db=True,
         )
         
-        forecast_points = []
-        for target_date, fc_dict in res["total_forecasts"].items():
-            h_day = (target_date - res["as_of_date"]).days
-            forecast_points.append(
-                ForecastPointSchema(
-                    metric_id=id,
-                    forecast_date=target_date,
-                    horizon_days=h_day,
-                    p10=fc_dict["p10"],
-                    p50=fc_dict["p50"],
-                    p90=fc_dict["p90"],
-                    dimension_values={},
-                    model_version=res["model_version"],
-                )
-            )
-            
-        return ForecastResultSchema(
-            metric_id=id,
-            horizon_days=horizon,
-            as_of_date=res["as_of_date"],
-            model_version=res["model_version"],
-            low_confidence=res["low_confidence"],
-            forecasts=forecast_points,
-        )
+        return format_forecast_result(id, horizon, res)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:

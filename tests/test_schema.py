@@ -59,4 +59,3 @@ async def test_all_tables_exist_and_valid():
             assert "uq_daily_rollups_metric_date_dims" in rollup_indexes, "uq_daily_rollups_metric_date_dims index missing on daily_rollups"
 
         await conn.run_sync(check_schema)
-    await test_engine.dispose()

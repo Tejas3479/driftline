@@ -78,12 +78,14 @@ async def test_digest_pdf_generation_and_api(override_db_dependency):
         assert confirm_resp.status_code == 200
 
         # 3. Trigger daily pipeline and weekly retrain & digest for the target metric
-        daily_res = await run_daily_pipeline(metric_ids=[metric_id])
-        assert len(daily_res) >= 1
-        assert daily_res[0]["status"] == "success"
+        from src.db.session import get_db
+        async for session in app.dependency_overrides[get_db]():
+            daily_res = await run_daily_pipeline(db=session, metric_ids=[metric_id])
+            assert len(daily_res) >= 1
+            assert daily_res[0]["status"] == "success"
 
-        weekly_digests = await run_weekly_retrain_and_digest(metric_ids=[metric_id])
-        assert len(weekly_digests) >= 1
+            weekly_digests = await run_weekly_retrain_and_digest(db=session, metric_ids=[metric_id])
+            assert len(weekly_digests) >= 1
 
         target_digest = weekly_digests[0]
         digest_id = target_digest.id

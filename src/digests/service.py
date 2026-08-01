@@ -258,10 +258,10 @@ async def run_daily_pipeline(
 
     res = await db.execute(stmt)
     metrics = list(res.scalars().all())
-    metric_info_list = [(m.id, m.name) for m in metrics]
+    metric_info_list = [(m.id, m.name, m.workspace_id) for m in metrics]
 
     results = []
-    for m_id, m_name in metric_info_list:
+    for m_id, m_name, w_id in metric_info_list:
         try:
             logger.info(f"Running daily pipeline for metric #{m_id} ({m_name})...")
             # 1. Re-run daily rollups and decomposition (which triggers anomaly detection internally)

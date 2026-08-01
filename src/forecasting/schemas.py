@@ -1,7 +1,7 @@
 import json
 from datetime import date, datetime
 from typing import Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 class ForecastPointSchema(BaseModel):
     metric_id: int
@@ -13,9 +13,11 @@ class ForecastPointSchema(BaseModel):
     dimension_values: Dict[str, str] = Field(default_factory=dict)
     model_version: str
 
-    @field_validator("p10", "p50", "p90")
-    def check_non_crossing(cls, v, info):
-        return v
+    @model_validator(mode='after')
+    def check_non_crossing(self):
+        if not (self.p10 <= self.p50 <= self.p90):
+            raise ValueError(f"Quantiles must not cross: p10={self.p10}, p50={self.p50}, p90={self.p90}")
+        return self
 
 class ForecastResultSchema(BaseModel):
     metric_id: int

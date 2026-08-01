@@ -1,7 +1,8 @@
 from datetime import date
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from src.auth.dependencies import get_current_user, verify_metric_access
+from src.auth.dependencies import get_current_user
+from src.ingestion.service import verify_metric_access
 from src.auth.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import get_db

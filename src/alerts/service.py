@@ -93,44 +93,53 @@ async def evaluate_and_trigger_alerts_for_metric(db: AsyncSession, metric_id: in
         u_res = await db.execute(select(User.email).where(User.workspace_id == metric.workspace_id))
         recipient_email = u_res.scalars().first()
 
-    created_notifications = []
+    if not target_anomalies:
+        return []
 
+    values_to_insert = []
+    anomaly_map = {a.id: a for a in target_anomalies}
+    
     for anomaly in target_anomalies:
-        try:
-            explanation = anomaly.explanation_text or f"High severity anomaly detected on {anomaly.date} (severity {anomaly.severity_score:.1f})."
-            title_str = f"High-Severity Anomaly ({anomaly.type.value.capitalize()}) on {metric.name}"
+        explanation = anomaly.explanation_text or f"High severity anomaly detected on {anomaly.date} (severity {anomaly.severity_score:.1f})."
+        title_str = f"High-Severity Anomaly ({anomaly.type.value.capitalize()}) on {metric.name}"
+        
+        values_to_insert.append({
+            "workspace_id": metric.workspace_id,
+            "metric_id": metric_id,
+            "anomaly_id": anomaly.id,
+            "title": title_str,
+            "message": explanation,
+            "severity_score": anomaly.severity_score,
+            "is_read": False
+        })
+        
+    stmt = insert(Notification).values(values_to_insert)
+    stmt = stmt.on_conflict_do_nothing(index_elements=['anomaly_id']).returning(Notification)
+    
+    try:
+        res = await db.execute(stmt)
+        await db.commit()
+        created_notifications = list(res.scalars().all())
+    except Exception as e:
+        logger.error(f"Failed to batch insert notifications for metric #{metric_id}: {str(e)}", exc_info=True)
+        await db.rollback()
+        return []
 
-            notification = Notification(
-                workspace_id=metric.workspace_id,
-                metric_id=metric_id,
-                anomaly_id=anomaly.id,
-                title=title_str,
-                message=explanation,
-                severity_score=anomaly.severity_score,
-                is_read=False
-            )
-            db.add(notification)
-            await db.commit()
-            await db.refresh(notification)
-            created_notifications.append(notification)
-
-            # 5. Isolated local SMTP dispatch (failure will never rollback DB notification)
-            if "email" in enabled_channels:
-                try:
-                    send_immediate_alert_email(
-                        workspace_id=metric.workspace_id,
-                        metric_name=metric.name,
-                        anomaly_date=anomaly.date.isoformat(),
-                        severity_score=anomaly.severity_score,
-                        explanation_text=explanation,
-                        recipient_email=recipient_email
-                    )
-                except Exception as email_err:
-                    logger.warning(f"Immediate alert email dispatch failed for anomaly #{anomaly.id}: {str(email_err)}")
-
-        except Exception as e:
-            logger.error(f"Failed to process notification for anomaly #{anomaly.id}: {str(e)}", exc_info=True)
-            await db.rollback()
+    # 5. Isolated local SMTP dispatch (failure will never rollback DB notification)
+    if "email" in enabled_channels and recipient_email:
+        for notif in created_notifications:
+            anomaly = anomaly_map[notif.anomaly_id]
+            try:
+                send_immediate_alert_email(
+                    workspace_id=metric.workspace_id,
+                    metric_name=metric.name,
+                    anomaly_date=anomaly.date.isoformat(),
+                    severity_score=notif.severity_score,
+                    explanation_text=notif.message,
+                    recipient_email=recipient_email
+                )
+            except Exception as email_err:
+                logger.warning(f"Email dispatch failed for alert on anomaly {anomaly.id}: {str(email_err)}")
 
     return created_notifications
 

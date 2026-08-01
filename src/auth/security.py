@@ -5,8 +5,10 @@ import jwt
 
 import os
 
-# Replace these with environment variables in a real production app
-SECRET_KEY = os.getenv("SECRET_KEY", "driftline_super_secret_dev_key_only")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is not set. A secure secret key is required for production.")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 

@@ -16,8 +16,6 @@ async def test_pipeline_ground_truth_evaluation():
     
     async with TestAsyncSessionLocal() as db:
         results = await run_pipeline_evaluation(session=db)
-        
-    await test_engine.dispose()
 
     # 1. Detection Recall Gate (>= 75.0% / at least 3 of 4 ground truth events detected)
     assert results["detection_recall"] >= 0.75, (

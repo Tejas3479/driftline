@@ -39,9 +39,3 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         
     return user
 
-async def verify_metric_access(metric_id: int, db: AsyncSession, workspace_id: int) -> Metric:
-    res = await db.execute(select(Metric).where(Metric.id == metric_id, Metric.workspace_id == workspace_id))
-    metric = res.scalar_one_or_none()
-    if not metric:
-        raise HTTPException(status_code=404, detail=f"Metric with id {metric_id} not found.")
-    return metric

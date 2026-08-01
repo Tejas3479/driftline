@@ -274,7 +274,7 @@ async def test_catboost_structural_importance(db: AsyncSession):
         cold_rows = [{"date": (start_d + timedelta(days=i)).isoformat(), "revenue": 100.0, "channel": "organic"} for i in range(20)]
         await client.post(f"/metrics/{cold_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": cold_rows, "replace": True})
 
-        async with async_session() as session:
+        async for session in app.dependency_overrides[get_db]():
             cold_importance = await train_and_persist_structural_importance(session, cold_id)
             assert cold_importance == []
 

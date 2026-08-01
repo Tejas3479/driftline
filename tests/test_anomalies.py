@@ -127,10 +127,8 @@ async def test_idempotency_and_marginal_rollups():
 
         # Query and assert rollups row count in DB
         # Expecting: 60 total rollup rows ({}) + 3 channels * 60 days = 240 rows
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async with test_engine.connect() as conn:
-            async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-            async with async_session() as session:
+        from src.db.session import get_db
+        async for session in app.dependency_overrides[get_db]():
                 res = await session.execute(
                     select(DailyRollup).where(DailyRollup.metric_id == metric_id)
                 )
@@ -151,7 +149,7 @@ async def test_idempotency_and_marginal_rollups():
         })
         assert confirm_res2.status_code == 200
 
-        async with async_session() as session:
+        async for session in app.dependency_overrides[get_db]():
             res2 = await session.execute(
                 select(DailyRollup).where(DailyRollup.metric_id == metric_id)
             )
@@ -164,8 +162,6 @@ async def test_idempotency_and_marginal_rollups():
         ts_data = timeseries_res.json()
         assert ts_data["metric_id"] == metric_id
         assert len(ts_data["points"]) == 60
-
-        await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_sensitivity_thresholds():
@@ -204,9 +200,8 @@ async def test_sensitivity_thresholds():
         assert anoms[0]["type"] == "spike"
 
         # Update sensitivity to low (threshold 3.5), recompute, and assert NOT flagged
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        from src.db.session import get_db
+        async for session in app.dependency_overrides[get_db]():
             await session.execute(
                 update(Metric).where(Metric.id == metric_id).values(sensitivity="low")
             )
@@ -223,7 +218,7 @@ async def test_sensitivity_thresholds():
         assert len(anom_res_low.json()) == 0
 
         # Update sensitivity to high (threshold 1.8) and check flagged
-        async with async_session() as session:
+        async for session in app.dependency_overrides[get_db]():
             await session.execute(
                 update(Metric).where(Metric.id == metric_id).values(sensitivity="high")
             )
@@ -233,8 +228,6 @@ async def test_sensitivity_thresholds():
 
         anom_res_high = await client.get(f"/metrics/{metric_id}/anomalies")
         assert len(anom_res_high.json()) == 1
-
-        await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_level_shift_classification():
@@ -342,9 +335,8 @@ async def test_idempotency_state_preservation():
         anom_date = datetime.strptime(anom_date_str, "%Y-%m-%d").date()
 
         # Edit status and explanation text in DB
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        from src.db.session import get_db
+        async for session in app.dependency_overrides[get_db]():
             await session.execute(
                 update(Anomaly).where(Anomaly.id == anom_id).values(
                     status="reviewed",
@@ -370,7 +362,7 @@ async def test_idempotency_state_preservation():
         # So index 35 is < max_date - 14 days, and its type/z_score should be LOCKED.
         # Let's mock a change in data by modifying the DB values of rollup for index 35
         # and recomputing rollup/detection.
-        async with async_session() as session:
+        async for session in app.dependency_overrides[get_db]():
             # Shift value of rollup at day 35, triggering a different robust z-score
             await session.execute(
                 update(DailyRollup).where(
@@ -380,15 +372,12 @@ async def test_idempotency_state_preservation():
             )
             await session.commit()
 
-        # Trigger detection directly
-        await detect_and_persist_anomalies(async_session(), metric_id)
-
+            # Trigger detection directly
+            await detect_and_persist_anomalies(session, metric_id)
         # Assert anomaly z_score has NOT changed because it falls inside the frozen zone (< cutoff)
         anom_res3 = await client.get(f"/metrics/{metric_id}/anomalies")
         anoms3 = anom_res3.json()
         assert anoms3[0]["z_score"] == anoms1[0]["z_score"]  # Did not update to new massive robust_z
-
-        await test_engine.dispose()
 
 @pytest.mark.asyncio
 async def test_all_zero_series_detection_skipped():
@@ -619,9 +608,8 @@ async def test_feedback_loop_weight_decay():
 
         # Verify frozen anomaly negative case
         # Set target anomaly date to day 15 (which is 45 days old relative to day 60)
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        from src.db.session import get_db
+        async for session in app.dependency_overrides[get_db]():
             res = await session.execute(select(Anomaly).where(Anomaly.id == target_id))
             db_anom = res.scalars().one()
             db_anom.date = start_d + timedelta(days=15)
@@ -631,7 +619,7 @@ async def test_feedback_loop_weight_decay():
         # Post feedback again to trigger recompute
         await client.post(f"/anomalies/{target_id}/feedback", json={"status": "false_positive"})
         
-        async with async_session() as session:
+        async for session in app.dependency_overrides[get_db]():
             res = await session.execute(select(Anomaly).where(Anomaly.id == target_id))
             db_anom_after = res.scalars().one()
             assert db_anom_after.severity_score == frozen_severity
@@ -662,8 +650,6 @@ async def test_feedback_loop_weight_decay():
         cold_anoms = cold_anom_res.json()
         assert len(cold_anoms) > 0
         assert all(a["isolation_score"] == 0.0 for a in cold_anoms)
-
-        await test_engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -822,16 +808,13 @@ async def test_date_gaps_decomposition_resilience():
         assert confirm_res.status_code == 200
 
         # Verify continuous calendar rollups were created (60 continuous days, total group + 1 segment group = 120 rollups)
-        test_engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-        async_session = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-        async with async_session() as session:
+        from src.db.session import get_db
+        async for session in app.dependency_overrides[get_db]():
             res = await session.execute(
                 select(DailyRollup).where(DailyRollup.metric_id == metric_id)
             )
             rollups = list(res.scalars().all())
             assert len(rollups) == 120
-
-        await test_engine.dispose()
 
 
 
