@@ -26,7 +26,7 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # 1. Create metric via API
-        m_resp = await client.post("/metrics", json={
+        m_resp = await client.post("/api/v1/metrics", json={
             "workspace_id": 1,
             "name": "Revenue Metric",
             "unit": "USD",
@@ -38,7 +38,7 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
         metric_id = m_resp.json()["id"]
 
         # 2. Configure alert rule with min_severity 50.0 and email channel
-        rule_resp = await client.post("/alert-rules", json={
+        rule_resp = await client.post("/api/v1/alert-rules", json={
             "metric_id": metric_id,
             "min_severity": 50.0,
             "channels": ["in_app", "email"]
@@ -80,7 +80,7 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
                 assert mock_send_email.called
 
             # 5. Verify GET /notifications API endpoint
-            notif_resp = await client.get("/notifications?workspace_id=1")
+            notif_resp = await client.get("/api/v1/notifications?workspace_id=1")
             assert notif_resp.status_code == 200
             notifs = notif_resp.json()
             assert len(notifs) >= 1
@@ -89,7 +89,7 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
 
             # 6. Mark notification as read
             notif_id = notifs[0]["id"]
-            read_resp = await client.patch(f"/notifications/{notif_id}/read")
+            read_resp = await client.patch(f"/api/v1/notifications/{notif_id}/read")
             assert read_resp.status_code == 200
             assert read_resp.json()["is_read"] is True
 

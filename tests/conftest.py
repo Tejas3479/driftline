@@ -54,5 +54,8 @@ async def db() -> AsyncSession:
     try:
         yield session
     finally:
-        pass
+        try:
+            await anext(db_gen)
+        except StopAsyncIteration:
+            pass
 

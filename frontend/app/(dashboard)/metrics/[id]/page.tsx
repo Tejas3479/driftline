@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp, LayoutGrid } from "lucide-react";
-import { fetchMetrics, fetchTimeseries, fetchAnomalies, Metric, TimeseriesPoint, Anomaly } from "@/app/api";
+import { Metric, TimeseriesPoint, Anomaly } from "@/app/api";
+import { useApi } from "@/hooks/useApi";
 import ScrollReveal from "@/components/ScrollReveal";
 
 
@@ -26,48 +27,16 @@ type RangeFilter = "7d" | "30d" | "90d" | "1y" | "all";
 
 export default function MetricDetail({ params }: { params: { id: string } }) {
   const metricId = parseInt(params.id);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [metric, setMetric] = useState<Metric | null>(null);
-  const [timeseriesData, setTimeseriesData] = useState<{
-    points: TimeseriesPoint[];
-    mad: number | null;
-  } | null>(null);
-  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const { data: metrics, error: metricsError, isLoading: metricsLoading } = useApi<Metric[]>("/api/v1/metrics");
+  const { data: tsData, error: tsError, isLoading: tsLoading } = useApi<TimeseriesResponse>(!isNaN(metricId) ? `/api/v1/metrics/${metricId}/timeseries` : null);
+  const { data: anomalies = [], error: anomError, isLoading: anomLoading } = useApi<Anomaly[]>(!isNaN(metricId) ? `/api/v1/metrics/${metricId}/anomalies` : null);
+
   const [range, setRange] = useState<RangeFilter>("all");
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Fetch all metrics to find current metric details
-        const metrics = await fetchMetrics();
-        const currentMetric = metrics.find((m) => m.id === metricId);
-        
-        if (!currentMetric) {
-          throw new Error(`Metric #${metricId} not found in backend list.`);
-        }
-        setMetric(currentMetric);
-
-        // Fetch timeseries and anomalies
-        const ts = await fetchTimeseries(metricId);
-        const anomList = await fetchAnomalies(metricId);
-
-        setTimeseriesData(ts);
-        setAnomalies(anomList);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
-        console.error("Failed to load metric details:", err);
-        setError(err.message || "Failed to load metric details");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (metricId) {
-      loadData();
-    }
-  }, [metricId]);
+  const metric = metrics?.find(m => m.id === metricId);
+  const loading = metricsLoading || tsLoading || anomLoading;
+  const error = metricsError?.message || tsError?.message || anomError?.message || null;
+  const timeseriesData = tsData || null;
 
   if (loading) {
     return (

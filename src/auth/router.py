@@ -10,9 +10,13 @@ from src.db.session import get_db
 from src.auth.models import User
 from src.db.models import Workspace
 from src.auth.schemas import UserCreate, UserRead, Token
-from src.auth.security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from src.auth.security import (
+    get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES,
+    COOKIE_NAME, COOKIE_SECURE, COOKIE_HTTPONLY, COOKIE_SAMESITE, COOKIE_MAX_AGE
+)
 from src.auth.dependencies import get_current_user
 from src.limiter import limiter
+from fastapi import Response
 
 from src.auth.service import register_user, authenticate_user
 
@@ -33,10 +37,11 @@ async def register(request: Request, user_in: UserCreate, db: AsyncSession = Dep
             detail=str(e),
         )
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 @limiter.limit("10/minute")
 async def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ) -> Any:
@@ -52,7 +57,20 @@ async def login(
     access_token = create_access_token(
         data={"sub": str(user.id)}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=access_token,
+        httponly=COOKIE_HTTPONLY,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        max_age=COOKIE_MAX_AGE
+    )
+    return {"status": "ok"}
+
+@router.post("/logout")
+async def logout(response: Response) -> Any:
+    response.delete_cookie(key=COOKIE_NAME, httponly=COOKIE_HTTPONLY, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE)
+    return {"status": "ok"}
 
 @router.get("/me", response_model=UserRead)
 @limiter.limit("30/minute")

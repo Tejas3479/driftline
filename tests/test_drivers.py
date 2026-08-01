@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.pool import NullPool
 
 from main import app
-from src.db.session import DATABASE_URL
+from src.db.session import DATABASE_URL, get_db
 from src.ingestion.models import Metric, Observation
 from src.anomalies.models import Anomaly, DailyRollup
 from src.drivers.service import calculate_anomaly_drivers, train_and_persist_structural_importance
@@ -17,7 +17,7 @@ from src.drivers.service import calculate_anomaly_drivers, train_and_persist_str
 async def test_driver_mathematical_invariant(db: AsyncSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Create metric with direction up_is_good
-        metric_res = await client.post("/metrics", json={
+        metric_res = await client.post("/api/v1/metrics", json={
             "name": "Invariant Test Metric",
             "direction_good": "up_is_good",
             "sensitivity": "medium"
@@ -41,7 +41,7 @@ async def test_driver_mathematical_invariant(db: AsyncSession):
             rows.append({"date": d.isoformat(), "revenue": 50.0 + s_val, "channel": "paid", "plan": "enterprise"})
 
         # Confirm ingestion
-        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+        await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
             "date_col": "date",
             "value_col": "revenue",
             "dimension_cols": ["channel", "plan"],
@@ -98,7 +98,7 @@ async def test_driver_mathematical_invariant(db: AsyncSession):
 @pytest.mark.asyncio
 async def test_driver_young_segment_handling(db: AsyncSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        metric_res = await client.post("/metrics", json={
+        metric_res = await client.post("/api/v1/metrics", json={
             "name": "Young Segment Metric",
             "direction_good": "up_is_good",
             "sensitivity": "medium"
@@ -117,7 +117,7 @@ async def test_driver_young_segment_handling(db: AsyncSession):
             if i >= 50:
                 rows.append({"date": d.isoformat(), "revenue": 20.0, "channel": "referral"})
 
-        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+        await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
             "date_col": "date",
             "value_col": "revenue",
             "dimension_cols": ["channel"],
@@ -147,7 +147,7 @@ async def test_driver_young_segment_handling(db: AsyncSession):
 @pytest.mark.asyncio
 async def test_driver_anomaly_injection():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        metric_res = await client.post("/metrics", json={
+        metric_res = await client.post("/api/v1/metrics", json={
             "name": "Injection Driver Metric",
             "direction_good": "up_is_good",
             "sensitivity": "medium"
@@ -165,7 +165,7 @@ async def test_driver_anomaly_injection():
             rows.append({"date": d.isoformat(), "revenue": val_organic, "channel": "organic"})
             rows.append({"date": d.isoformat(), "revenue": val_paid, "channel": "paid"})
 
-        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+        await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
             "date_col": "date",
             "value_col": "revenue",
             "dimension_cols": ["channel"],
@@ -174,7 +174,7 @@ async def test_driver_anomaly_injection():
         })
 
         # Fetch anomalies
-        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anom_res = await client.get(f"/api/v1/metrics/{metric_id}/anomalies")
         anoms = anom_res.json()
         assert len(anoms) >= 1
 
@@ -182,7 +182,7 @@ async def test_driver_anomaly_injection():
         anom_id = target_anom["id"]
 
         # Call GET /anomalies/{id}/drivers
-        drivers_res = await client.get(f"/anomalies/{anom_id}/drivers")
+        drivers_res = await client.get(f"/api/v1/anomalies/{anom_id}/drivers")
         assert drivers_res.status_code == 200
         data = drivers_res.json()
 
@@ -200,15 +200,15 @@ async def test_driver_anomaly_injection():
 async def test_explanation_text_direction_flipping():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Case A: up_is_good + revenue drop -> Declined
-        metric_a_res = await client.post("/metrics", json={"name": "Revenue Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_a_res = await client.post("/api/v1/metrics", json={"name": "Revenue Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         id_a = metric_a_res.json()["id"]
 
         # Case B: down_is_good + churn spike -> Declined (performance decline)
-        metric_b_res = await client.post("/metrics", json={"name": "Churn Rate Metric", "direction_good": "down_is_good", "sensitivity": "medium"})
+        metric_b_res = await client.post("/api/v1/metrics", json={"name": "Churn Rate Metric", "direction_good": "down_is_good", "sensitivity": "medium"})
         id_b = metric_b_res.json()["id"]
 
         # Case C: down_is_good + churn drop -> Improved
-        metric_c_res = await client.post("/metrics", json={"name": "Churn Good Metric", "direction_good": "down_is_good", "sensitivity": "medium"})
+        metric_c_res = await client.post("/api/v1/metrics", json={"name": "Churn Good Metric", "direction_good": "down_is_good", "sensitivity": "medium"})
         id_c = metric_c_res.json()["id"]
 
         start_d = date(2026, 1, 1)
@@ -222,17 +222,17 @@ async def test_explanation_text_direction_flipping():
                 rows.append({"date": d.isoformat(), "val": val, "channel": "organic"})
             return rows
 
-        await client.post(f"/metrics/{id_a}/data/confirm", json={"date_col": "date", "value_col": "val", "dimension_cols": ["channel"], "rows": make_rows(20.0), "replace": True})
-        await client.post(f"/metrics/{id_b}/data/confirm", json={"date_col": "date", "value_col": "val", "dimension_cols": ["channel"], "rows": make_rows(200.0), "replace": True})
-        await client.post(f"/metrics/{id_c}/data/confirm", json={"date_col": "date", "value_col": "val", "dimension_cols": ["channel"], "rows": make_rows(20.0), "replace": True})
+        await client.post(f"/api/v1/metrics/{id_a}/data/confirm", json={"date_col": "date", "value_col": "val", "dimension_cols": ["channel"], "rows": make_rows(20.0), "replace": True})
+        await client.post(f"/api/v1/metrics/{id_b}/data/confirm", json={"date_col": "date", "value_col": "val", "dimension_cols": ["channel"], "rows": make_rows(200.0), "replace": True})
+        await client.post(f"/api/v1/metrics/{id_c}/data/confirm", json={"date_col": "date", "value_col": "val", "dimension_cols": ["channel"], "rows": make_rows(20.0), "replace": True})
 
-        anom_a = (await client.get(f"/metrics/{id_a}/anomalies")).json()[0]
-        anom_b = (await client.get(f"/metrics/{id_b}/anomalies")).json()[0]
-        anom_c = (await client.get(f"/metrics/{id_c}/anomalies")).json()[0]
+        anom_a = (await client.get(f"/api/v1/metrics/{id_a}/anomalies")).json()[0]
+        anom_b = (await client.get(f"/api/v1/metrics/{id_b}/anomalies")).json()[0]
+        anom_c = (await client.get(f"/api/v1/metrics/{id_c}/anomalies")).json()[0]
 
-        drv_a = (await client.get(f"/anomalies/{anom_a['id']}/drivers")).json()
-        drv_b = (await client.get(f"/anomalies/{anom_b['id']}/drivers")).json()
-        drv_c = (await client.get(f"/anomalies/{anom_c['id']}/drivers")).json()
+        drv_a = (await client.get(f"/api/v1/anomalies/{anom_a['id']}/drivers")).json()
+        drv_b = (await client.get(f"/api/v1/anomalies/{anom_b['id']}/drivers")).json()
+        drv_c = (await client.get(f"/api/v1/anomalies/{anom_c['id']}/drivers")).json()
 
         assert drv_a["explanation_text"].startswith("Declined")
         assert drv_b["explanation_text"].startswith("Declined")
@@ -246,7 +246,7 @@ async def test_explanation_text_direction_flipping():
 @pytest.mark.asyncio
 async def test_catboost_structural_importance(db: AsyncSession):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        metric_res = await client.post("/metrics", json={"name": "CatBoost Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_res = await client.post("/api/v1/metrics", json={"name": "CatBoost Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         metric_id = metric_res.json()["id"]
 
         rows = []
@@ -257,7 +257,7 @@ async def test_catboost_structural_importance(db: AsyncSession):
             rows.append({"date": d.isoformat(), "revenue": 100.0, "channel": "organic", "region": "us"})
             rows.append({"date": d.isoformat(), "revenue": 50.0, "channel": "paid", "region": "eu"})
 
-        await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel", "region"], "rows": rows, "replace": True})
+        await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel", "region"], "rows": rows, "replace": True})
 
         session = db
         if True:
@@ -269,10 +269,10 @@ async def test_catboost_structural_importance(db: AsyncSession):
             assert "region" in feats
 
         # 2. Test history guard (<30 days)
-        cold_res = await client.post("/metrics", json={"name": "Cold Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        cold_res = await client.post("/api/v1/metrics", json={"name": "Cold Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         cold_id = cold_res.json()["id"]
         cold_rows = [{"date": (start_d + timedelta(days=i)).isoformat(), "revenue": 100.0, "channel": "organic"} for i in range(20)]
-        await client.post(f"/metrics/{cold_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": cold_rows, "replace": True})
+        await client.post(f"/api/v1/metrics/{cold_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": cold_rows, "replace": True})
 
         async for session in app.dependency_overrides[get_db]():
             cold_importance = await train_and_persist_structural_importance(session, cold_id)
@@ -282,7 +282,7 @@ async def test_catboost_structural_importance(db: AsyncSession):
 @pytest.mark.asyncio
 async def test_multi_segment_anomalies_explanation():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        metric_res = await client.post("/metrics", json={"name": "Multi Segment Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_res = await client.post("/api/v1/metrics", json={"name": "Multi Segment Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         metric_id = metric_res.json()["id"]
 
         rows = []
@@ -296,12 +296,12 @@ async def test_multi_segment_anomalies_explanation():
             rows.append({"date": d.isoformat(), "revenue": val_organic, "channel": "organic"})
             rows.append({"date": d.isoformat(), "revenue": val_paid, "channel": "paid"})
 
-        await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": rows, "replace": True})
+        await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": rows, "replace": True})
 
-        anom_res = await client.get(f"/metrics/{metric_id}/anomalies")
+        anom_res = await client.get(f"/api/v1/metrics/{metric_id}/anomalies")
         target_anom = [a for a in anom_res.json() if a["date"] == "2026-02-05"][0]
 
-        drivers_res = await client.get(f"/anomalies/{target_anom['id']}/drivers")
+        drivers_res = await client.get(f"/api/v1/anomalies/{target_anom['id']}/drivers")
         text = drivers_res.json()["explanation_text"]
 
         assert "Other channel segments also experienced significant shifts." in text
@@ -310,7 +310,7 @@ async def test_multi_segment_anomalies_explanation():
 async def test_segment_comparison_spec_and_filtering():
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # 1. Create metric with 2 dimensions (channel, plan)
-        metric_res = await client.post("/metrics", json={"name": "Segment Comparison Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        metric_res = await client.post("/api/v1/metrics", json={"name": "Segment Comparison Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         metric_id = metric_res.json()["id"]
 
         rows = []
@@ -321,7 +321,7 @@ async def test_segment_comparison_spec_and_filtering():
             rows.append({"date": d.isoformat(), "revenue": 50.0 + i, "channel": "paid", "plan": "enterprise"})
             rows.append({"date": d.isoformat(), "revenue": 25.0 + i, "channel": "referral", "plan": "starter"})
 
-        await client.post(f"/metrics/{metric_id}/data/confirm", json={
+        await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
             "date_col": "date",
             "value_col": "revenue",
             "dimension_cols": ["channel", "plan"],
@@ -330,7 +330,7 @@ async def test_segment_comparison_spec_and_filtering():
         })
 
         # 2. Test default dimension & range=all
-        spec_res = await client.get(f"/metrics/{metric_id}/segment-comparison")
+        spec_res = await client.get(f"/api/v1/metrics/{metric_id}/segment-comparison")
         assert spec_res.status_code == 200
         spec = spec_res.json()
         
@@ -360,7 +360,7 @@ async def test_segment_comparison_spec_and_filtering():
         assert y_scale[0] <= 25.0 # y_min around 25.0 minus padding
 
         # 3. Test range=7d server-side date filtering
-        spec_7d_res = await client.get(f"/metrics/{metric_id}/segment-comparison?dimension=channel&range=7d")
+        spec_7d_res = await client.get(f"/api/v1/metrics/{metric_id}/segment-comparison?dimension=channel&range=7d")
         assert spec_7d_res.status_code == 200
         spec_7d = spec_7d_res.json()
         values_7d = extract_records(spec_7d)
@@ -374,15 +374,15 @@ async def test_segment_comparison_spec_and_filtering():
             assert v_date >= cutoff_7d
 
         # 4. Test invalid dimension query (400)
-        invalid_dim_res = await client.get(f"/metrics/{metric_id}/segment-comparison?dimension=invalid_dim")
+        invalid_dim_res = await client.get(f"/api/v1/metrics/{metric_id}/segment-comparison?dimension=invalid_dim")
         assert invalid_dim_res.status_code == 400
         assert "Unknown dimension 'invalid_dim'" in invalid_dim_res.json()["detail"]
 
         # 5. Test metric without dimensions (400)
-        nodim_res = await client.post("/metrics", json={"name": "No Dim Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        nodim_res = await client.post("/api/v1/metrics", json={"name": "No Dim Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         nodim_id = nodim_res.json()["id"]
         
-        nodim_spec_res = await client.get(f"/metrics/{nodim_id}/segment-comparison")
+        nodim_spec_res = await client.get(f"/api/v1/metrics/{nodim_id}/segment-comparison")
         assert nodim_spec_res.status_code == 400
         assert "has no configured dimensions" in nodim_spec_res.json()["detail"]
 

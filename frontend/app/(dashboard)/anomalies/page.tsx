@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { fetchGlobalAnomalies, GlobalAnomaly } from "@/app/api";
+import { useApi } from "@/hooks/useApi";
 import ScrollReveal from "@/components/ScrollReveal";
 import CustomSelect from "@/components/CustomSelect";
 
@@ -25,42 +26,16 @@ type StatusTab = "all" | "new" | "reviewed" | "resolved" | "false_positive";
 type SortOption = "date_desc" | "date_asc" | "severity_desc" | "severity_asc";
 
 export default function GlobalAnomalyLogPage() {
-  const [anomalies, setAnomalies] = useState<GlobalAnomaly[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [activeTab, setActiveTab] = useState<StatusTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("date_desc");
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    async function loadAnomalies() {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await fetchGlobalAnomalies(
-          activeTab === "all" ? undefined : activeTab,
-          undefined,
-          signal
-        );
-        setAnomalies(data);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
-        if (err.name === "AbortError") return;
-        console.error("Failed to load anomalies log:", err);
-        setError(err.message || "Failed to load anomaly log.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadAnomalies();
-
-    return () => {
-      controller.abort();
-    };
-  }, [activeTab]);
+  const url = activeTab === "all" 
+    ? "/api/v1/anomalies/global" 
+    : `/api/v1/anomalies/global?status=${activeTab}`;
+    
+  const { data: anomalies = [], error: rawError, isLoading: loading } = useApi<GlobalAnomaly[]>(url);
+  const error = rawError ? rawError.message || "Failed to load anomaly log." : null;
 
   // Client-side filtering & sorting
   const filteredAndSortedAnomalies = useMemo(() => {

@@ -65,75 +65,101 @@ def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
 
 async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -> None:
     """
-    Groups observations, reindexes to continuous calendar, runs decomposition,
-    and bulk upserts rollups to daily_rollups table. Overwrites entire history for the metric.
+    Incrementally aggregates new Observations, merges with historical DailyRollups,
+    runs STL decomposition, and bulk upserts rollups. Bounded memory complexity.
     """
-    # 1. Fetch all observations for the metric
-    obs_res = await db.execute(
-        select(Observation).where(Observation.metric_id == metric_id).order_by(Observation.date)
+    # 1. Get the latest date we have already rolled up
+    latest_res = await db.execute(
+        select(DailyRollup.date)
+        .where(DailyRollup.metric_id == metric_id)
+        .order_by(DailyRollup.date.desc())
+        .limit(1)
     )
-    observations = obs_res.scalars().all()
-    if not observations:
-        return
+    latest_date = latest_res.scalar_one_or_none()
 
-    # Fetch dimension definitions for the metric
+    # 2. Fetch ONLY new observations
+    obs_query = select(Observation).where(Observation.metric_id == metric_id)
+    if latest_date:
+        obs_query = obs_query.where(Observation.date > latest_date)
+    obs_query = obs_query.order_by(Observation.date)
+    
+    obs_res = await db.execute(obs_query)
+    new_observations = obs_res.scalars().all()
+
+    if not new_observations and latest_date is not None:
+        return  # No new data to process
+
+    # Fetch dimension definitions
     dim_defs_res = await db.execute(
         select(DimensionDef.name).where(DimensionDef.metric_id == metric_id)
     )
     dimension_names = dim_defs_res.scalars().all()
 
-    # Get overall date range
-    dates = [obs.date for obs in observations]
-    min_date = min(dates)
-    max_date = max(dates)
-    full_date_range = pd.date_range(start=min_date, end=max_date, freq='D')
-
-    # Prep list of all timeseries inputs
-    # Format: (label_dict, list_of_observations)
+    # Prep list of new timeseries groups
     timeseries_groups: List[tuple[Dict[str, str], List[Observation]]] = []
+    timeseries_groups.append(({}, list(new_observations)))
 
-    # Total Group (empty dimension filter)
-    timeseries_groups.append(({}, list(observations)))
-
-    # Marginal groups per dimension
     for dim_name in dimension_names:
         dim_values = set()
-        for obs in observations:
+        for obs in new_observations:
             val = obs.dimension_values.get(dim_name) if obs.dimension_values else None
             dim_values.add(val if val is not None else "__unassigned__")
             
         for dim_val in dim_values:
             filtered_obs = []
-            for obs in observations:
+            for obs in new_observations:
                 val = obs.dimension_values.get(dim_name) if obs.dimension_values else None
                 if (dim_val == "__unassigned__" and val is None) or (val == dim_val):
                     filtered_obs.append(obs)
             timeseries_groups.append(({dim_name: dim_val}, filtered_obs))
 
+    # Fetch existing rollups for historical context (bounded O(Days * Dims) memory)
+    existing_res = await db.execute(
+        select(DailyRollup).where(DailyRollup.metric_id == metric_id).order_by(DailyRollup.date)
+    )
+    existing_rollups = existing_res.scalars().all()
+
     upsert_values = []
 
     for dim_vals, group_obs in timeseries_groups:
-        # Group by date and sum value
+        # Process new data
         records = [{"date": pd.to_datetime(obs.date), "value": obs.value} for obs in group_obs]
+        new_df = pd.DataFrame(records)
+        if not new_df.empty:
+            new_df = new_df.groupby("date")["value"].sum().reset_index()
+
+        # Get historical data for this segment
+        hist = [r for r in existing_rollups if r.dimension_values == dim_vals]
+        hist_records = [{"date": pd.to_datetime(r.date), "value": r.value_total} for r in hist]
+        hist_df = pd.DataFrame(hist_records)
+
+        # Merge history with new data
+        if hist_df.empty and new_df.empty:
+            continue
+        elif hist_df.empty:
+            combined_df = new_df
+        elif new_df.empty:
+            combined_df = hist_df
+        else:
+            combined_df = pd.concat([hist_df, new_df], ignore_index=True)
+            combined_df = combined_df.drop_duplicates(subset=["date"], keep="last")
+            
+        combined_df.sort_values("date", inplace=True)
         
-        def _prep_and_decompose():
-            group_df = pd.DataFrame(records)
-            if group_df.empty:
-                return None
-            group_df = group_df.groupby("date")["value"].sum().reset_index()
-            group_df.set_index("date", inplace=True)
+        min_d = combined_df["date"].min()
+        max_d = combined_df["date"].max()
+        full_date_range = pd.date_range(start=min_d, end=max_d, freq='D')
+        
+        def _prep_and_decompose(df, date_range):
+            if df.empty: return None
+            df.set_index("date", inplace=True)
+            df = df.reindex(date_range)
+            return decompose_timeseries(df)
             
-            # Reindex to continuous calendar
-            group_df = group_df.reindex(full_date_range)
-            
-            # Decompose
-            return decompose_timeseries(group_df)
-            
-        decomposed_df = await asyncio.to_thread(_prep_and_decompose)
+        decomposed_df = await asyncio.to_thread(_prep_and_decompose, combined_df, full_date_range)
         if decomposed_df is None:
             continue
         
-        # Create DailyRollup values
         for d, row in decomposed_df.iterrows():
             d_date = d.date()
             val_tot = float(row['value']) if pd.notnull(row['value']) else 0.0
@@ -152,7 +178,6 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
             })
 
     if upsert_values:
-        # Run insert ON CONFLICT DO UPDATE
         stmt = insert(DailyRollup)
         update_dict = {
             'value_total': stmt.excluded.value_total,
@@ -498,8 +523,11 @@ async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: Ano
                 norm_z_val = float(row["norm_z"].values[0])
                 iso_score_val = float(row["isolation_score"].values[0])
 
+                weighted_z = metric.z_score_weight * norm_z_val
+                weighted_iso = (1.0 - metric.z_score_weight) * iso_score_val
+
                 # Tie-break: if equal or within 1e-6, treat norm_z as dominant
-                if norm_z_val >= iso_score_val - 1e-6:
+                if weighted_z >= weighted_iso - 1e-6:
                     # Decay z-score weight
                     metric.z_score_weight = max(0.1, min(0.9, metric.z_score_weight - 0.05))
                 else:

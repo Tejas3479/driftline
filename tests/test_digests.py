@@ -42,7 +42,7 @@ async def test_digest_pdf_generation_and_api(override_db_dependency):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # 1. Create metric
-        create_resp = await client.post("/metrics", json={
+        create_resp = await client.post("/api/v1/metrics", json={
             "workspace_id": 1,
             "name": "Daily Revenue",
             "unit": "USD",
@@ -58,7 +58,7 @@ async def test_digest_pdf_generation_and_api(override_db_dependency):
             csv_bytes = f.read()
 
         upload_resp = await client.post(
-            f"/metrics/{metric_id}/data",
+            f"/api/v1/metrics/{metric_id}/data",
             files={"file": ("daily_revenue.csv", csv_bytes, "text/csv")}
         )
         assert upload_resp.status_code == 200
@@ -66,7 +66,7 @@ async def test_digest_pdf_generation_and_api(override_db_dependency):
         rows = upload_resp.json()["rows"]
 
         confirm_resp = await client.post(
-            f"/metrics/{metric_id}/data/confirm",
+            f"/api/v1/metrics/{metric_id}/data/confirm",
             json={
                 "date_col": inferred["date_col"],
                 "value_col": inferred["value_col"],
@@ -106,18 +106,18 @@ async def test_digest_pdf_generation_and_api(override_db_dependency):
             assert header == b"%PDF", "Generated file is not a valid PDF document (missing %PDF header)."
 
         # 6. Verify GET /digests/{id} download API endpoint
-        get_resp = await client.get(f"/digests/{digest_id}")
+        get_resp = await client.get(f"/api/v1/digests/{digest_id}")
         assert get_resp.status_code == 200
         assert get_resp.headers["content-type"] == "application/pdf"
         assert len(get_resp.content) > 0
 
         # 7. Verify GET /digests list API endpoint
-        list_resp = await client.get(f"/digests?metric_id={metric_id}")
+        list_resp = await client.get(f"/api/v1/digests?metric_id={metric_id}")
         assert list_resp.status_code == 200
         digests_list = list_resp.json()
         assert len(digests_list) >= 1
         assert digests_list[0]["id"] == digest_id
 
         # 8. Verify GET /digests/{id} 404 handling
-        missing_resp = await client.get("/digests/999999")
+        missing_resp = await client.get("/api/v1/digests/999999")
         assert missing_resp.status_code == 404

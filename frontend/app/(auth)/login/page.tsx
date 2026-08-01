@@ -38,13 +38,11 @@ export default function LoginPage() {
       
       // Fetch user profile
       const userResponse = await fetch("/api/v1/auth/me", {
-        headers: {
-          Authorization: `Bearer ${data.access_token}`
-        }
+        credentials: "include"
       });
       const userData = await userResponse.json();
       
-      login(data.access_token, userData);
+      login(userData);
     } catch (err) {
       setError("Invalid email or password. Please try again.");
     } finally {

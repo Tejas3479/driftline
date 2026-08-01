@@ -24,6 +24,7 @@ import DataUploadModal from "./DataUploadModal";
 import { Bell, BellRing, Check } from "lucide-react";
 import { AppNotification, fetchNotifications, markNotificationRead } from "@/app/api";
 import { useAuth } from "./AuthProvider";
+import { useApi } from "@/hooks/useApi";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -31,14 +32,13 @@ export default function Navbar() {
   const { logout, user } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const { data: notifications = [], mutate: setNotifications } = useApi<AppNotification[]>(
+    user ? "/api/v1/notifications?limit=50" : null,
+    { refreshInterval: 10000 } // Poll every 10 seconds
+  );
+  
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    fetchNotifications(50).then(setNotifications).catch(console.error);
-  }, [user]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -56,8 +56,9 @@ export default function Navbar() {
 
   const handleMarkRead = async (id: number) => {
     try {
+      setNotifications((prev) => prev?.map(n => n.id === id ? { ...n, is_read: true } : n), false);
       await markNotificationRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setNotifications(); // Revalidate
     } catch(e) {
       console.error(e);
     }

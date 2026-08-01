@@ -261,3 +261,13 @@
 - Enforced a transaction rollback pattern in `tests/conftest.py` using `test_engine.connect()`, `conn.begin()`, and `join_transaction_mode="create_savepoint"`. This completely prevents test pollution in the live development database by rolling back all data mutations at the end of each test.
 - Patched a critical security flaw in `src/auth/security.py` by extracting the hardcoded `SECRET_KEY` into an `os.getenv` call, aligning it with best practices for production JWT signing. Added it to `.env.example`.
 - Next session context: Application backend is fully non-blocking under heavy CPU load, with protected database connection limits, strictly aligned frontend API contracts, and secured JWT handling.
+
+## Session 30: Codebase Audit Fixes - Phase 2
+- Replaced passlib/bcrypt with rgon2-cffi in src/auth/security.py for modernized password hashing.
+- Removed outdated ix_tests.py artifact from the root directory.
+- Cleaned up dual router registrations in src/main.py ensuring domain routers are only registered with the /api/v1 prefix.
+- Updated API_BASE_URL in rontend/app/api.ts to natively use /api/v1 and added proxy rewrites in rontend/next.config.js to properly route /api/v1 calls to the backend from port 3000.
+
+
+ -   * * S e s s i o n   2 0 2 6 - 0 8 - 0 1   ( P h a s e   2   c o m p l e t i o n ) * * :   F i x e d   a l l   r e g r e s s i o n   t e s t s   c a u s e d   b y   U R L   p r e f i x   c h a n g e s   a n d   d e p e n d e n c y   o v e r r i d i n g .   F i x e d   a   s i l e n t   t e s t   f a l s e   p o s i t i v e   i n   \ 	 e s t _ a n o m a l i e s . p y \   c a u s e d   b y   a n   e a r l i e r   i n c r e m e n t a l   r o l l u p   o p t i m i z a t i o n .   R e f a c t o r e d   t e s t   s e t u p   t o   p r e v e n t   a s y n c p g   c o n n e c t i o n   l e a k s   d u r i n g   g e n e r a t o r   s h u t d o w n   i n   \ c o n f t e s t . p y \ .   E n t i r e   p y t e s t   s u i t e   ( 5 3   t e s t s )   i s   g r e e n   a n d   r o b u s t .  
+ 

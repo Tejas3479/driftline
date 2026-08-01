@@ -17,88 +17,40 @@ import {
 import SegmentBarChart from "@/components/SegmentBarChart";
 import FeedbackControl from "@/components/FeedbackControl";
 import MetricChart from "@/components/MetricChart";
+import { useApi } from "@/hooks/useApi";
+import { useSWRConfig } from "swr";
 
 export default function AnomalyDetailPage({ params }: { params: { id: string } }) {
   const anomalyId = parseInt(params.id, 10);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [anomaly, setAnomaly] = useState<Anomaly | null>(null);
-  const [metric, setMetric] = useState<Metric | null>(null);
-  const [drivers, setDrivers] = useState<AnomalyDriversResponse | null>(null);
-
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
-  const [timeseries, setTimeseries] = useState<TimeseriesResponse | null>(null);
-  const [tsLoading, setTsLoading] = useState<boolean>(false);
+  const { mutate } = useSWRConfig();
+  const { data: anomaly, error: anomalyError, isLoading: loadingAnomaly } = useApi<Anomaly>(
+    !isNaN(anomalyId) ? `/api/v1/anomalies/${anomalyId}` : null
+  );
+  
+  const { data: metrics, isLoading: loadingMetrics } = useApi<Metric[]>("/api/v1/metrics");
+  
+  const { data: drivers, isLoading: loadingDrivers } = useApi<AnomalyDriversResponse>(
+    !isNaN(anomalyId) ? `/api/v1/anomalies/${anomalyId}/drivers` : null
+  );
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-        setError(null);
+  const metric = metrics?.find((m) => m.id === anomaly?.metric_id) || null;
 
-        // 1. Fetch Anomaly Detail
-        const anomData = await fetchAnomalyDetail(anomalyId);
-        setAnomaly(anomData);
+  const tsUrl = metric 
+    ? (selectedSegment ? `/api/v1/metrics/${metric.id}/timeseries?segment=${encodeURIComponent(selectedSegment)}` : `/api/v1/metrics/${metric.id}/timeseries`) 
+    : null;
+    
+  const { data: timeseries, isLoading: tsLoading } = useApi<TimeseriesResponse>(tsUrl);
 
-        // 2. Fetch Metrics to find target Metric definition
-        const metrics = await fetchMetrics();
-        const m = metrics.find((item) => item.id === anomData.metric_id);
-        if (m) {
-          setMetric(m);
-        }
-
-        // 3. Fetch Anomaly Drivers Analysis
-        const driversData = await fetchAnomalyDrivers(anomalyId);
-        setDrivers(driversData);
-
-        // 4. Fetch Total Metric Timeseries initially
-        const tsData = await fetchTimeseries(anomData.metric_id);
-        setTimeseries(tsData);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
-        console.error("Error loading anomaly detail page:", err);
-        setError(err.message || "Failed to load anomaly details");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    if (!isNaN(anomalyId)) {
-      loadData();
-    } else {
-      setError("Invalid Anomaly ID");
-      setLoading(false);
-    }
-  }, [anomalyId]);
-
-  // Re-fetch timeseries when selectedSegment changes
-  useEffect(() => {
-    async function updateSegmentTimeseries() {
-      if (!metric) return;
-      try {
-        setTsLoading(true);
-        const tsData = await fetchTimeseries(metric.id, selectedSegment || undefined);
-        setTimeseries(tsData);
-      } catch (err) {
-        console.error("Failed to fetch segment timeseries:", err);
-      } finally {
-        setTsLoading(false);
-      }
-    }
-
-    if (metric) {
-      updateSegmentTimeseries();
-    }
-  }, [selectedSegment, metric]);
+  const loading = loadingAnomaly || loadingMetrics || loadingDrivers;
+  const error = anomalyError ? anomalyError.message : isNaN(anomalyId) ? "Invalid Anomaly ID" : null;
 
   const handleFeedbackSubmitted = async (updatedAnomaly: Anomaly) => {
-    setAnomaly(updatedAnomaly);
-    // Optionally refresh metric to get updated z_score_weight if returned
-    if (metric) {
-      const metrics = await fetchMetrics();
-      const m = metrics.find((item) => item.id === metric.id);
-      if (m) setMetric(m);
-    }
+    // Update local cache without revalidating instantly
+    mutate(`/api/v1/anomalies/${anomalyId}`, updatedAnomaly, false);
+    // Refresh metrics to get updated z_score_weight if returned
+    mutate("/api/v1/metrics");
   };
 
   if (loading) {

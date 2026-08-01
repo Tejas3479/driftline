@@ -36,7 +36,7 @@ async def test_workspace_user_management():
             "password": "password123"
         })
         assert login_res.status_code == 200
-        admin_token = login_res.json()["access_token"]
+        admin_token = login_res.cookies.get("driftline_token")
         headers_admin = {"Authorization": f"Bearer {admin_token}"}
         
         # 2. Admin adds a member to the workspace
@@ -61,7 +61,7 @@ async def test_workspace_user_management():
             "username": member_email,
             "password": "password123"
         })
-        member_token = login_member_res.json()["access_token"]
+        member_token = login_member_res.cookies.get("driftline_token")
         headers_member = {"Authorization": f"Bearer {member_token}"}
         
         add_fail_res = await client.post(

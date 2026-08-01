@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, AlertTriangle, Activity, Info, LayoutGrid } from "lucide-react";
-import { fetchMetrics, fetchSegmentComparison, Metric } from "@/app/api";
+import { Metric } from "@/app/api";
+import { useApi } from "@/hooks/useApi";
 
 // Dynamically import SegmentComparisonChart to prevent SSR window/DOM issues with vega-embed
 const SegmentComparisonChart = dynamic(() => import("@/components/SegmentComparisonChart"), {
@@ -23,72 +24,24 @@ type RangeFilter = "7d" | "30d" | "90d" | "1y" | "all";
 
 export default function SegmentComparisonPage({ params }: { params: { id: string } }) {
   const metricId = parseInt(params.id);
-  const [loading, setLoading] = useState(true);
-  const [fetchingControls, setFetchingControls] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [metric, setMetric] = useState<Metric | null>(null);
   const [selectedDimension, setSelectedDimension] = useState<string | undefined>(undefined);
   const [range, setRange] = useState<RangeFilter>("all");
-  const [vegaSpec, setVegaSpec] = useState<any>(null);
+  
+  const { data: metrics, error: metricsError, isLoading: metricsLoading } = useApi<Metric[]>("/api/v1/metrics");
+  
+  const queryParams = new URLSearchParams();
+  if (selectedDimension) queryParams.set("dimension", selectedDimension);
+  if (range) queryParams.set("range", range);
+  
+  const { data: vegaSpec, error: vegaError, isLoading: vegaLoading } = useApi<any>(
+    !isNaN(metricId) ? `/api/v1/metrics/${metricId}/segment-comparison?${queryParams.toString()}` : null
+  );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    async function loadData() {
-      try {
-        if (!metric) {
-          setLoading(true);
-        } else {
-          setFetchingControls(true);
-        }
-        setError(null);
-
-        // Fetch metric details if not already loaded
-        let currentMetric = metric;
-        if (!currentMetric) {
-          const metrics = await fetchMetrics();
-          currentMetric = metrics.find((m) => m.id === metricId) || null;
-          if (!currentMetric) {
-            throw new Error(`Metric #${metricId} not found.`);
-          }
-          setMetric(currentMetric);
-        }
-
-        // Fetch Vega-Lite spec from backend with server-side date range filtering
-        const spec = await fetchSegmentComparison(
-          metricId,
-          selectedDimension,
-          range,
-          undefined,
-          undefined,
-          signal
-        );
-
-        setVegaSpec(spec);
-
-        // Extract effective dimension name if not set
-        if (!selectedDimension && spec && spec.title) {
-          // If dimension wasn't explicitly selected, spec is for default dimension
-        }} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
-        if (err.name === "AbortError") return;
-        console.error("Failed to load segment comparison spec:", err);
-        setError(err.message || "Failed to load segment comparison data.");
-      } finally {
-        setLoading(false);
-        setFetchingControls(false);
-      }
-    }
-
-    if (metricId) {
-      loadData();
-    }
-
-    return () => {
-      controller.abort();
-    };
-  }, [metricId, selectedDimension, range]);
+  const metric = metrics?.find(m => m.id === metricId) || null;
+  
+  const fetchingControls = vegaLoading;
+  const loading = (metricsLoading || vegaLoading) && (!metric || !vegaSpec);
+  const error = metricsError?.message || vegaError?.message || null;
 
   if (loading) {
     return (

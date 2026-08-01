@@ -14,6 +14,7 @@ import {
   ForecastResult,
   AccuracyResponse,
 } from "@/app/api";
+import { useApi } from "@/hooks/useApi";
 import LowConfidenceBanner from "@/components/LowConfidenceBanner";
 import ForecastStatsPanel from "@/components/ForecastStatsPanel";
 import ScrollReveal from "@/components/ScrollReveal";
@@ -52,75 +53,29 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
   const [fetchingControls, setFetchingControls] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [metric, setMetric] = useState<Metric | null>(null);
-  const [timeseriesData, setTimeseriesData] = useState<{
-    points: TimeseriesPoint[];
-    mad: number | null;
-  } | null>(null);
-
+  const { data: metrics, error: metricsError, isLoading: metricsLoading } = useApi<Metric[]>("/api/v1/metrics");
+  const { data: tsData, error: tsError, isLoading: tsLoading } = useApi<TimeseriesResponse>(
+    !isNaN(metricId) ? `/api/v1/metrics/${metricId}/timeseries` : null
+  );
+  
   // Single unified state for controls
   const [horizon, setHorizon] = useState<HorizonOption>(30);
   const [backend, setBackend] = useState<BackendOption>("lightgbm");
+  
+  const { data: forecastResult, error: fcError, isLoading: fcLoading } = useApi<ForecastResult>(
+    !isNaN(metricId) ? `/api/v1/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}` : null
+  );
+  
+  const { data: accuracyResponse, error: accError, isLoading: accLoading } = useApi<AccuracyResponse>(
+    !isNaN(metricId) ? `/api/v1/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}` : null
+  );
 
-  const [forecastResult, setForecastResult] = useState<ForecastResult | null>(null);
-  const [accuracyResponse, setAccuracyResponse] = useState<AccuracyResponse | null>(null);
+  const metric = metrics?.find((m) => m.id === metricId) || null;
+  const timeseriesData = tsData || null;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    async function loadData() {
-      try {
-        if (!metric) {
-          setLoading(true);
-        } else {
-          setFetchingControls(true);
-        }
-        setError(null);
-
-        // Fetch metric info and timeseries if not already loaded
-        let currentMetric = metric;
-        let tsData = timeseriesData;
-
-        if (!currentMetric) {
-          const metrics = await fetchMetrics();
-          currentMetric = metrics.find((m) => m.id === metricId) || null;
-          if (!currentMetric) {
-            throw new Error(`Metric #${metricId} not found.`);
-          }
-          setMetric(currentMetric);
-        }
-
-        if (!tsData) {
-          tsData = await fetchTimeseries(metricId);
-          setTimeseriesData(tsData);
-        }
-
-        // Fetch forecast and accuracy concurrently with single state parameters
-        const [fcRes, accRes] = await Promise.all([
-          fetchForecast(metricId, horizon, backend, signal),
-          fetchAccuracy(metricId, horizon, backend, signal),
-        ]);
-
-        setForecastResult(fcRes);
-        setAccuracyResponse(accRes);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
-        if (err.name === "AbortError") return;
-        console.error("Failed to load forecast page data:", err);
-        setError(err.message || "Failed to load forecast data.");
-      } finally {
-        setLoading(false);
-        setFetchingControls(false);
-      }
-    }
-
-    if (metricId) {
-      loadData();
-    }
-
-    return () => {
-      controller.abort();
-    };
-  }, [metricId, horizon, backend]);
+  const fetchingControls = fcLoading || accLoading;
+  const loading = (metricsLoading || tsLoading) && (!metric || !timeseriesData);
+  const error = metricsError?.message || tsError?.message || fcError?.message || accError?.message || null;
 
   if (loading) {
     return (

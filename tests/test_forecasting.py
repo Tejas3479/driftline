@@ -439,7 +439,7 @@ async def test_forecast_accuracy_endpoint():
     
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         # Create metric
-        m_res = await client.post("/metrics", json={"name": "API Forecast Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
+        m_res = await client.post("/api/v1/metrics", json={"name": "API Forecast Metric", "direction_good": "up_is_good", "sensitivity": "medium"})
         metric_id = m_res.json()["id"]
         
         # Confirm 80 days of continuous data
@@ -450,11 +450,11 @@ async def test_forecast_accuracy_endpoint():
             val = 200.0 + i * 0.5 + (i % 7) * 3.0
             rows.append({"date": d.isoformat(), "revenue": val})
             
-        confirm_res = await client.post(f"/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "rows": rows})
+        confirm_res = await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "rows": rows})
         assert confirm_res.status_code == 200
         
         # Query GET /metrics/{id}/forecast
-        fc_res = await client.get(f"/metrics/{metric_id}/forecast?horizon=14")
+        fc_res = await client.get(f"/api/v1/metrics/{metric_id}/forecast?horizon=14")
         assert fc_res.status_code == 200
         fc_data = fc_res.json()
         assert fc_data["metric_id"] == metric_id
@@ -463,7 +463,7 @@ async def test_forecast_accuracy_endpoint():
         assert len(fc_data["forecasts"]) == 14
         
         # Query GET /metrics/{id}/accuracy
-        acc_res = await client.get(f"/metrics/{metric_id}/accuracy?horizon=7")
+        acc_res = await client.get(f"/api/v1/metrics/{metric_id}/accuracy?horizon=7")
         assert acc_res.status_code == 200
         acc_data = acc_res.json()
         assert acc_data["metric_id"] == metric_id

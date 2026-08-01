@@ -6,8 +6,7 @@ import { User } from "@/app/api";
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  login: (token: string, user: User) => void;
+  login: (user: User) => void;
   logout: () => void;
   isLoading: boolean;
 }
@@ -16,65 +15,53 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    // Check localStorage on mount
-    const storedToken = localStorage.getItem("driftline_token");
-    if (storedToken) {
-      setToken(storedToken);
-      // Fetch user profile to verify token
-      fetch("/api/v1/auth/me", {
-        headers: { Authorization: `Bearer ${storedToken}` },
+    // Fetch user profile to verify session via httpOnly cookie
+    fetch("/api/v1/auth/me", {
+      credentials: "include",
+    })
+      .then((res) => {
+        if (res.ok) {
+          return res.json();
+        }
+        throw new Error("Invalid session");
       })
-        .then((res) => {
-          if (res.ok) {
-            return res.json();
-          }
-          throw new Error("Invalid token");
-        })
-        .then((userData) => {
-          setUser(userData);
-        })
-        .catch(() => {
-          // Token invalid
-          localStorage.removeItem("driftline_token");
-          setToken(null);
-          setUser(null);
-          if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings") || pathname.startsWith("/anomalies") || pathname.startsWith("/metrics")) {
-            router.push("/login");
-          }
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    } else {
-      setIsLoading(false);
-      if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings") || pathname.startsWith("/anomalies") || pathname.startsWith("/metrics")) {
-        router.push("/login");
-      }
-    }
+      .then((userData) => {
+        setUser(userData);
+      })
+      .catch(() => {
+        // Session invalid
+        setUser(null);
+        if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings") || pathname.startsWith("/anomalies") || pathname.startsWith("/metrics")) {
+          router.push("/login");
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, [pathname, router]);
 
-  const login = (newToken: string, newUser: User) => {
-    localStorage.setItem("driftline_token", newToken);
-    setToken(newToken);
+  const login = (newUser: User) => {
     setUser(newUser);
     router.push("/dashboard");
   };
 
-  const logout = () => {
-    localStorage.removeItem("driftline_token");
-    setToken(null);
+  const logout = async () => {
+    try {
+      await fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" });
+    } catch (e) {
+      console.error("Logout error", e);
+    }
     setUser(null);
     router.push("/login");
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

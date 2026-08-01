@@ -70,7 +70,7 @@ export interface AnomalyDriversResponse {
   structural_importance: StructuralImportance[];
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + '/api/v1';
 
 export interface VegaLiteSpec {
   $schema?: string;
@@ -93,19 +93,15 @@ async function parseErrorDetail(res: Response, fallbackPrefix: string): Promise<
 }
 
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem("driftline_token") : null;
   const headers = new Headers(init?.headers);
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
   
   const res = await fetch(input, {
     ...init,
     headers,
+    credentials: "include",
   });
   
   if (res.status === 401 && typeof window !== 'undefined') {
-    localStorage.removeItem("driftline_token");
     if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
       window.location.href = '/login';
     }

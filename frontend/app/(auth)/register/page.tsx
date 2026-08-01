@@ -57,11 +57,11 @@ export default function RegisterPage() {
       
       // 3. Fetch user
       const userResponse = await fetch("/api/v1/auth/me", {
-        headers: { Authorization: `Bearer ${data.access_token}` }
+        credentials: "include"
       });
       const userData = await userResponse.json();
       
-      login(data.access_token, userData);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
+      login(userData);} catch (e: unknown) {  const err = e instanceof Error ? e : new Error(String(e));
       setError(err.message || "An error occurred. Please try again.");
     } finally {
       setIsLoading(false);

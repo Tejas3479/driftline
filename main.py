@@ -74,13 +74,11 @@ app.add_middleware(
 app.add_middleware(CorrelationIdMiddleware)
 
 # Register auth router publicly
-app.include_router(auth_router)
-app.include_router(auth_router, prefix="/api/v1", include_in_schema=False)
+app.include_router(auth_router, prefix="/api/v1")
 
 # Register domain routers securely
 for r in [ingestion_router, anomalies_router, drivers_router, forecasting_router, digests_router, alerts_router, workspaces_router]:
-    app.include_router(r)
-    app.include_router(r, prefix="/api/v1", include_in_schema=False)
+    app.include_router(r, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():
