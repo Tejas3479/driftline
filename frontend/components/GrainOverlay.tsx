@@ -13,7 +13,7 @@ export default function GrainOverlay() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-[9999] opacity-[0.035]"
+      className="pointer-events-none fixed inset-0 z-9999 opacity-[0.035]"
       style={{ willChange: "transform" }}
     >
       <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg">

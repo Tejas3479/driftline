@@ -13,6 +13,7 @@ import {
   TimeseriesPoint,
   ForecastResult,
   AccuracyResponse,
+  TimeseriesResponse,
 } from "@/app/api";
 import { useApi } from "@/hooks/useApi";
 import LowConfidenceBanner from "@/components/LowConfidenceBanner";
@@ -49,9 +50,6 @@ type BackendOption = "lightgbm" | "xgboost";
 
 export default function ForecastPage({ params }: { params: { id: string } }) {
   const metricId = parseInt(params.id);
-  const [loading, setLoading] = useState(true);
-  const [fetchingControls, setFetchingControls] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const { data: metrics, error: metricsError, isLoading: metricsLoading } = useApi<Metric[]>("/api/v1/metrics");
   const { data: tsData, error: tsError, isLoading: tsLoading } = useApi<TimeseriesResponse>(
@@ -126,7 +124,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10 border-b border-slate-800 pb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-slate-500 text-xs font-extrabold uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+              <span className="text-slate-500 text-xs font-extrabold uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-sm">
                 Metric #{metric.id}
               </span>
               <span className="rounded-full bg-purple-950/40 px-2.5 py-0.5 text-xs font-semibold text-purple-300 border border-purple-800/40">
@@ -154,7 +152,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
                   onClick={() => setHorizon(h)}
                   className={`px-3 py-1 rounded text-xs font-bold transition-all ${
                     horizon === h
-                      ? "bg-purple-600 text-white shadow"
+                      ? "bg-purple-600 text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
@@ -174,7 +172,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
                   onClick={() => setBackend(b)}
                   className={`px-3 py-1 rounded text-xs font-bold uppercase transition-all ${
                     backend === b
-                      ? "bg-cyan-600 text-white shadow"
+                      ? "bg-cyan-600 text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >
@@ -197,7 +195,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
         {/* Model Accuracy Track Record Stats Panel */}
         <ScrollReveal direction="up">
           <ForecastStatsPanel
-            accuracy={accuracyResponse}
+            accuracy={accuracyResponse || null}
             modelVersion={forecastResult?.model_version || null}
             backend={backend}
           />
@@ -306,11 +304,11 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
                           </td>
                           <td className="py-3 px-4">
                             {pt.used_ml_model ? (
-                              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-950/40 text-purple-300 border border-purple-800/40">
+                              <span className="px-2 py-0.5 rounded-sm text-[11px] font-bold bg-purple-950/40 text-purple-300 border border-purple-800/40">
                                 ML Model ({backend})
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-800 text-slate-400">
+                              <span className="px-2 py-0.5 rounded-sm text-[11px] font-bold bg-slate-800 text-slate-400">
                                 Seasonal Naive Fallback
                               </span>
                             )}

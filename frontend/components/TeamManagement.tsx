@@ -145,7 +145,7 @@ export default function TeamManagement() {
                           <select
                             value={member.role}
                             onChange={(e) => handleRoleChange(member.id, e.target.value)}
-                            className="bg-slate-950 border border-slate-700 text-xs font-bold rounded-lg px-2 py-1 focus:outline-none focus:border-cyan-500 text-slate-300 uppercase"
+                            className="bg-slate-950 border border-slate-700 text-xs font-bold rounded-lg px-2 py-1 focus:outline-hidden focus:border-cyan-500 text-slate-300 uppercase"
                           >
                             <option value="member">Member</option>
                             <option value="admin">Admin</option>
@@ -208,7 +208,7 @@ export default function TeamManagement() {
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-hidden focus:border-cyan-500"
                   placeholder="colleague@acme.com"
                 />
               </div>
@@ -220,7 +220,7 @@ export default function TeamManagement() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white placeholder-slate-600 focus:outline-hidden focus:border-cyan-500"
                   placeholder="Secure string to share out-of-band"
                 />
                 <p className="text-[10px] text-slate-500 mt-1">Share this password with the user. They can change it later.</p>
@@ -231,7 +231,7 @@ export default function TeamManagement() {
                 <select
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-cyan-500 uppercase text-sm"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-hidden focus:border-cyan-500 uppercase text-sm"
                 >
                   <option value="member">Member</option>
                   <option value="admin">Admin</option>

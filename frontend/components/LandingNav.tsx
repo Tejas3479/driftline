@@ -43,7 +43,7 @@ export default function LandingNav() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <a href="/" className="flex items-center gap-2.5 group">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-500 shadow-glow-cyan-sm">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-cyan-500 to-indigo-500 shadow-glow-cyan-sm">
             <Activity className="h-4 w-4 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-lg font-extrabold tracking-tight text-white group-hover:text-gradient-cyan transition-colors">

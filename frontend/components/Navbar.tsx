@@ -139,7 +139,7 @@ export default function Navbar() {
         {/* Brand Logo & Context Selector */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-indigo-600 p-[1px] shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/40 transition-shadow">
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-tr from-cyan-500 via-teal-400 to-indigo-600 p-px shadow-lg shadow-cyan-500/20 group-hover:shadow-cyan-500/40 transition-shadow">
               <div className="flex h-full w-full items-center justify-center rounded-[11px] bg-slate-950">
                 <Activity className="h-5 w-5 text-cyan-400 stroke-[2.5] group-hover:scale-110 transition-transform" />
               </div>
@@ -223,7 +223,7 @@ export default function Navbar() {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="relative p-2 rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50 transition-all focus:outline-none"
+                  className="relative p-2 rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-slate-900/50 transition-all focus:outline-hidden"
                 >
                   {unreadCount > 0 ? (
                     <BellRing className="h-4 w-4 animate-pulse text-cyan-400" />
@@ -310,7 +310,7 @@ export default function Navbar() {
         <button
           type="button"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="lg:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white focus:outline-none"
+          className="lg:hidden p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white focus:outline-hidden"
           aria-label="Toggle navigation menu"
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

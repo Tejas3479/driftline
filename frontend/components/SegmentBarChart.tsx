@@ -116,13 +116,13 @@ export default function SegmentBarChart({
                 onClick={() => setActiveTab(dim)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition duration-200 ${
                   isActive
-                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-sm"
+                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-xs"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
                 }`}
               >
                 {dim.toUpperCase()}
                 {isPrimary && (
-                  <span className="ml-1.5 rounded bg-cyan-500/30 px-1 py-0.2 text-[10px] text-cyan-300 font-bold">
+                  <span className="ml-1.5 rounded-sm bg-cyan-500/30 px-1 py-0.2 text-[10px] text-cyan-300 font-bold">
                     Primary
                   </span>
                 )}
@@ -134,7 +134,7 @@ export default function SegmentBarChart({
               onClick={() => setActiveTab("all")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition duration-200 ${
                 activeTab === "all"
-                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-sm"
+                  ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shadow-xs"
                   : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
               }`}
             >
@@ -201,11 +201,11 @@ export default function SegmentBarChart({
       {/* Legend / Color explanation */}
       <div className="mt-4 flex items-center justify-end gap-6 border-t border-slate-800/60 pt-3 text-xs text-slate-400">
         <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded bg-emerald-500 inline-block" />
+          <span className="h-3 w-3 rounded-sm bg-emerald-500 inline-block" />
           <span>Helped Metric Performance</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded bg-rose-500 inline-block" />
+          <span className="h-3 w-3 rounded-sm bg-rose-500 inline-block" />
           <span>Hurt Metric Performance</span>
         </div>
       </div>

@@ -92,7 +92,7 @@ export default function SegmentComparisonPage({ params }: { params: { id: string
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 border-b border-slate-800 pb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-slate-500 text-xs font-extrabold uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+              <span className="text-slate-500 text-xs font-extrabold uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-sm">
                 Metric #{metric.id}
               </span>
               <span className="rounded-full bg-cyan-950/50 px-2.5 py-0.5 text-xs font-semibold text-cyan-300 border border-cyan-800/40 flex items-center gap-1">
@@ -119,7 +119,7 @@ export default function SegmentComparisonPage({ params }: { params: { id: string
                   onClick={() => setRange(r)}
                   className={`px-3 py-1 rounded text-xs font-bold uppercase transition-all ${
                     range === r
-                      ? "bg-cyan-500 text-slate-950 shadow"
+                      ? "bg-cyan-500 text-slate-950 shadow-sm"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                 >

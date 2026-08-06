@@ -25,7 +25,7 @@ export default function ErrorBoundaryUI({ error, reset, context = 'page' }: Erro
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="relative flex flex-col items-center max-w-lg w-full text-center p-10 rounded-3xl border border-white/5 bg-black/60 backdrop-blur-2xl shadow-2xl overflow-hidden"
       >
-        <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-transparent to-orange-500/5 pointer-events-none" />
+        <div className="absolute inset-0 bg-linear-to-br from-red-500/10 via-transparent to-orange-500/5 pointer-events-none" />
         
         <motion.div 
           initial={{ scale: 0.8, rotate: -10 }}

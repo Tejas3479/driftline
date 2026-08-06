@@ -30,7 +30,7 @@ export default function LoadingUI({ text = 'Initializing...' }: { text?: string 
           
           {/* Center icon container */}
           <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 border border-slate-800 shadow-[0_0_30px_rgba(34,211,238,0.15)] z-10 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 to-purple-500/10" />
+            <div className="absolute inset-0 bg-linear-to-tr from-cyan-500/10 to-purple-500/10" />
             <Activity className="h-6 w-6 text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
           </div>
         </div>

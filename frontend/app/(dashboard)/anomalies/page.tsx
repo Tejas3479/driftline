@@ -94,25 +94,25 @@ export default function GlobalAnomalyLogPage() {
     const t = type.toLowerCase();
     if (t === "spike") {
       return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded-sm">
           <TrendingUp className="h-3 w-3" /> Spike
         </span>
       );
     } else if (t === "drop") {
       return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2 py-0.5 rounded-sm">
           <TrendingDown className="h-3 w-3" /> Drop
         </span>
       );
     } else if (t === "level_shift") {
       return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 px-2 py-0.5 rounded">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-400 bg-purple-950/40 border border-purple-800/40 px-2 py-0.5 rounded-sm">
           <ArrowRight className="h-3 w-3" /> Level Shift
         </span>
       );
     } else {
       return (
-        <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-400 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-400 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-sm">
           <Activity className="h-3 w-3" /> Volatility
         </span>
       );
@@ -229,7 +229,7 @@ export default function GlobalAnomalyLogPage() {
                 placeholder="Search by metric or explanation..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl bg-slate-900 border border-slate-800 pl-9 pr-4 py-2 text-xs font-medium text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none focus:shadow-glow-cyan-sm"
+                className="w-full rounded-xl bg-slate-900 border border-slate-800 pl-9 pr-4 py-2 text-xs font-medium text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-hidden focus:shadow-glow-cyan-sm"
               />
             </div>
 

@@ -80,8 +80,14 @@ export default function CustomCursor() {
     };
   }, [isVisible]);
 
-  // Don't render anything during SSR
-  if (typeof window === "undefined") return null;
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Don't render anything until client-side hydration is complete
+  if (!isMounted) return null;
 
   return (
     <>
@@ -96,7 +102,7 @@ export default function CustomCursor() {
       <div
         ref={dotRef}
         aria-hidden="true"
-        className="pointer-events-none fixed left-0 top-0 z-[10000] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200"
+        className="pointer-events-none fixed left-0 top-0 z-10000 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200"
         style={{
           width: "6px",
           height: "6px",
@@ -110,7 +116,7 @@ export default function CustomCursor() {
       <div
         ref={ringRef}
         aria-hidden="true"
-        className="pointer-events-none fixed left-0 top-0 z-[10000] -translate-x-1/2 -translate-y-1/2 transition-[width,height,border-color,opacity] duration-300 ease-out"
+        className="pointer-events-none fixed left-0 top-0 z-10000 -translate-x-1/2 -translate-y-1/2 transition-[width,height,border-color,opacity] duration-300 ease-out"
         style={{
           width: isHovering ? "48px" : "32px",
           height: isHovering ? "48px" : "32px",

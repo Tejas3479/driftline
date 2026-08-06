@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import ScrollReveal from "@/components/ScrollReveal";
+import AtroposCard from "@/components/AtroposCard";
+import GlowButton from "@/components/GlowButton";
+import DataUploadModal from "@/components/DataUploadModal";
 import { useApi } from "@/hooks/useApi";
+import { useSWRConfig } from "swr";
+import { Metric, TimeseriesResponse, Anomaly } from "@/app/api";
 
 function MetricCard({ metric }: { metric: Metric }) {
   const { data: tsData, isLoading: tsLoading } = useApi<TimeseriesResponse>(`/api/v1/metrics/${metric.id}/timeseries`);
@@ -26,10 +31,10 @@ function MetricCard({ metric }: { metric: Metric }) {
     return (
       <div className="h-64 rounded-2xl glass-panel p-6 flex flex-col justify-between animate-pulse">
         <div className="space-y-3">
-          <div className="h-4 w-24 rounded bg-slate-800" />
-          <div className="h-6 w-48 rounded bg-slate-800" />
+          <div className="h-4 w-24 rounded-sm bg-slate-800" />
+          <div className="h-6 w-48 rounded-sm bg-slate-800" />
         </div>
-        <div className="h-12 w-32 rounded bg-slate-800" />
+        <div className="h-12 w-32 rounded-sm bg-slate-800" />
         <div className="h-10 w-full rounded-xl bg-slate-800/60" />
       </div>
     );
@@ -172,7 +177,7 @@ function MetricCard({ metric }: { metric: Metric }) {
           </div>
 
           <div className="mt-4 pt-4 border-t border-slate-800/80">
-            {hasAnomaly ? (
+            {hasAnomaly && recentAnomaly ? (
               <Link
                 href={`/anomalies/${recentAnomaly.id}`}
                 className="flex items-start gap-3 rounded-2xl bg-amber-950/40 border border-amber-500/40 p-3.5 hover:bg-amber-950/80 transition duration-300 group"
@@ -217,7 +222,7 @@ export default function Home() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   
   const { data: metrics = [], error: metricsError, isLoading, mutate } = useApi<Metric[]>("/api/v1/metrics");
-  const { mutate: globalMutate } = import("swr").then(m => m.useSWRConfig());
+  const { mutate: globalMutate } = useSWRConfig();
   
   const retrying = isLoading;
   const loading = isLoading;
@@ -243,10 +248,10 @@ export default function Home() {
                 className="h-64 rounded-2xl glass-panel p-6 flex flex-col justify-between animate-pulse"
               >
                 <div className="space-y-3">
-                  <div className="h-4 w-24 rounded bg-slate-800" />
-                  <div className="h-6 w-48 rounded bg-slate-800" />
+                  <div className="h-4 w-24 rounded-sm bg-slate-800" />
+                  <div className="h-6 w-48 rounded-sm bg-slate-800" />
                 </div>
-                <div className="h-12 w-32 rounded bg-slate-800" />
+                <div className="h-12 w-32 rounded-sm bg-slate-800" />
                 <div className="h-10 w-full rounded-xl bg-slate-800/60" />
               </div>
             ))}
@@ -282,7 +287,7 @@ export default function Home() {
             </h2>
 
             <p className="text-slate-400 text-sm leading-relaxed mb-6">
-              Could not establish connection to the FastAPI analysis engine at <code className="font-mono text-cyan-400 bg-slate-900 px-1.5 py-0.5 rounded">http://127.0.0.1:8000</code>.
+              Could not establish connection to the FastAPI analysis engine at <code className="font-mono text-cyan-400 bg-slate-900 px-1.5 py-0.5 rounded-sm">http://127.0.0.1:8000</code>.
             </p>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-left text-xs space-y-2 mb-6">
@@ -299,7 +304,7 @@ export default function Home() {
               whileTap={{ scale: 0.96 }}
               onClick={loadData}
               disabled={retrying}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-3 text-sm font-extrabold text-slate-950 hover:from-amber-400 hover:to-orange-500 transition shadow-lg shadow-amber-500/20 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-500 to-orange-600 px-6 py-3 text-sm font-extrabold text-slate-950 hover:from-amber-400 hover:to-orange-500 transition shadow-lg shadow-amber-500/20 disabled:opacity-50"
             >
               <RefreshCw className={`h-4 w-4 ${retrying ? "animate-spin" : ""}`} />
               {retrying ? "Reconnecting..." : "Retry Connection"}
@@ -313,7 +318,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-mesh-pattern text-slate-100 p-8 md:p-16">
       <div className="mx-auto max-w-7xl relative">
-        <div className="absolute top-0 left-1/4 -z-10 h-72 w-72 rounded-full bg-gradient-to-tr from-cyan-500/15 to-indigo-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute top-0 left-1/4 -z-10 h-72 w-72 rounded-full bg-linear-to-tr from-cyan-500/15 to-indigo-500/10 blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 border-b border-slate-800/80 pb-8">
           <div>

@@ -349,7 +349,7 @@ export default function ModelHealthSettingsPage() {
                 <select 
                   value={sensitivity} 
                   onChange={(e) => setSensitivity(e.target.value as "low" | "medium" | "high")}
-                  className="w-full bg-slate-950 border border-slate-800 text-cyan-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                  className="w-full bg-slate-950 border border-slate-800 text-cyan-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-cyan-500"
                 >
                   <option value="low">LOW</option>
                   <option value="medium">MEDIUM</option>
@@ -369,7 +369,7 @@ export default function ModelHealthSettingsPage() {
                 <select 
                   value={directionGood} 
                   onChange={(e) => setDirectionGood(e.target.value as "up_is_good" | "down_is_good")}
-                  className="w-full bg-slate-950 border border-slate-800 text-emerald-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full bg-slate-950 border border-slate-800 text-emerald-300 font-extrabold text-xs uppercase px-3 py-2 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
                 >
                   <option value="up_is_good">UP IS GOOD</option>
                   <option value="down_is_good">DOWN IS GOOD</option>
@@ -393,7 +393,7 @@ export default function ModelHealthSettingsPage() {
                     onChange={(e) => setZScoreWeight(parseFloat(e.target.value))}
                     className="w-full accent-purple-500"
                   />
-                  <span className="text-purple-300 font-extrabold text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                  <span className="text-purple-300 font-extrabold text-xs bg-slate-950 px-2 py-1 rounded-sm border border-slate-800">
                     {zScoreWeight.toFixed(1)}
                   </span>
                 </div>
@@ -417,7 +417,7 @@ export default function ModelHealthSettingsPage() {
                 <button 
                   onClick={handleSaveSettings}
                   disabled={isSaving}
-                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-bold py-2.5 px-4 rounded-lg transition-all shadow-lg hover:shadow-glow-cyan-sm disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 bg-linear-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 text-white font-bold py-2.5 px-4 rounded-lg transition-all shadow-lg hover:shadow-glow-cyan-sm disabled:opacity-50"
                 >
                   {isSaving ? <Activity className="h-5 w-5 animate-spin" /> : <Settings className="h-5 w-5" />}
                   {isSaving ? "Saving..." : "Save Settings"}

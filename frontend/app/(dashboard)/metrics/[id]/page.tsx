@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp, LayoutGrid } from "lucide-react";
-import { Metric, TimeseriesPoint, Anomaly } from "@/app/api";
+import { Metric, TimeseriesPoint, Anomaly, TimeseriesResponse } from "@/app/api";
 import { useApi } from "@/hooks/useApi";
 import ScrollReveal from "@/components/ScrollReveal";
 
@@ -120,14 +120,14 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-12 border-b border-slate-800 pb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-slate-500 text-xs font-extrabold uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+              <span className="text-slate-500 text-xs font-extrabold uppercase tracking-widest bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-sm">
                 Metric #{metric.id}
               </span>
               <span className="rounded-full bg-slate-850 px-2.5 py-0.5 text-xs font-semibold text-cyan-400 border border-slate-800">
                 {metric.grain} grain
               </span>
               {anomalies.filter(a => a.status === 'new').length > 0 && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-950/20 border border-amber-900/30 px-2 py-0.5 rounded">
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 bg-amber-950/20 border border-amber-900/30 px-2 py-0.5 rounded-sm">
                   <ShieldAlert className="h-3.5 w-3.5" /> Recent Anomalies
                 </span>
               )}
@@ -277,7 +277,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
                         <tr key={anom.id} className="text-slate-300 hover:bg-slate-900/40 transition">
                           <td className="py-4 pr-4 font-semibold">{anom.date}</td>
                           <td className="py-4 px-4">
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold border uppercase ${typeLabelColor}`}>
+                            <span className={`px-2 py-0.5 rounded-sm text-xs font-bold border uppercase ${typeLabelColor}`}>
                               {anom.type.replace("_", " ")}
                             </span>
                           </td>

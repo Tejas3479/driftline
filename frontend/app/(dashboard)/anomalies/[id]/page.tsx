@@ -144,7 +144,7 @@ export default function AnomalyDetailPage({ params }: { params: { id: string } }
             </div>
 
             {/* Prominent Explanation Card */}
-            <div className="glass-card-lg rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-900 to-indigo-950/40 p-6 md:p-8 relative overflow-hidden shadow-glow-cyan-sm">
+            <div className="glass-card-lg rounded-2xl border border-cyan-500/30 bg-linear-to-r from-cyan-950/40 via-slate-900 to-indigo-950/40 p-6 md:p-8 relative overflow-hidden shadow-glow-cyan-sm">
               <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                 <BarChart2 className="h-48 w-48 text-cyan-400" />
               </div>

@@ -302,10 +302,10 @@ export default function LandingPage() {
                 >
                   <AtroposCard intensity="subtle" className="h-full">
                     <div
-                      className={`group relative overflow-hidden rounded-2xl border border-slate-800/60 bg-gradient-to-br ${feat.gradient} p-6 backdrop-blur-sm transition-all duration-300 hover:border-slate-700/80 hover:shadow-lg hover:shadow-cyan-500/5 h-full`}
+                      className={`group relative overflow-hidden rounded-2xl border border-slate-800/60 bg-linear-to-br ${feat.gradient} p-6 backdrop-blur-sm transition-all duration-300 hover:border-slate-700/80 hover:shadow-lg hover:shadow-cyan-500/5 h-full`}
                     >
                       {/* Background glow on hover */}
-                      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
+                      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-linear-to-br from-cyan-500/10 to-transparent opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100" />
 
                       <div className="relative z-10">
                         <div className={`mb-4 inline-flex items-center justify-center rounded-xl bg-slate-900/60 p-3 ${feat.iconColor}`}>
@@ -346,7 +346,7 @@ export default function LandingPage() {
 
           {/* Glassmorphic Browser Frame with Animated Gradient Border */}
           <ScrollReveal direction="up" delay={0.1}>
-            <div className="relative rounded-3xl p-[1px] animated-border overflow-hidden shadow-2xl">
+            <div className="relative rounded-3xl p-px animated-border overflow-hidden shadow-2xl">
               <div className="rounded-[23px] bg-slate-950/90 backdrop-blur-2xl p-6 md:p-10 border border-slate-800/80">
                 {/* Browser Top Bar */}
                 <div className="flex items-center justify-between border-b border-slate-800/80 pb-5 mb-8">
@@ -385,7 +385,7 @@ export default function LandingPage() {
                           <span className="text-amber-400 font-mono font-bold">-4.21 σ</span>
                         </div>
                         <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-amber-500 to-red-500 w-4/5" />
+                          <div className="h-full bg-linear-to-r from-amber-500 to-red-500 w-4/5" />
                         </div>
                       </div>
                     </div>
@@ -462,7 +462,7 @@ export default function LandingPage() {
 
           <div className="relative">
             {/* Connecting gradient line */}
-            <div className="absolute left-8 top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/50 via-indigo-500/50 to-violet-500/50 hidden sm:block" />
+            <div className="absolute left-8 top-0 bottom-0 w-px bg-linear-to-b from-cyan-500/50 via-indigo-500/50 to-violet-500/50 hidden sm:block" />
 
             <div className="space-y-12">
               {steps.map((step, i) => {
@@ -475,7 +475,7 @@ export default function LandingPage() {
                   >
                     <div className="flex gap-6 sm:gap-8">
                       {/* Step indicator */}
-                      <div className="relative flex-shrink-0">
+                      <div className="relative shrink-0">
                         <div
                           className={`flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-800/60 bg-slate-900/80 backdrop-blur-sm ${step.color}`}
                         >
@@ -593,7 +593,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-indigo-500">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-linear-to-br from-cyan-500 to-indigo-500">
               <Activity className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-sm font-bold text-slate-300">

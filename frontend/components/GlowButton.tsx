@@ -32,7 +32,7 @@ const sizeClasses: Record<Size, string> = {
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-gradient-to-r from-cyan-500 via-indigo-500 to-violet-500 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40",
+    "bg-linear-to-r from-cyan-500 via-indigo-500 to-violet-500 text-white shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40",
   secondary:
     "bg-transparent border border-slate-700 text-slate-200 hover:border-cyan-500/50 hover:text-white hover:shadow-glow-cyan-sm",
   ghost:
@@ -97,7 +97,7 @@ export default function GlowButton({
   const shimmerOverlay = variant === "primary" ? (
     <span
       aria-hidden="true"
-      className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+      className="absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full"
     />
   ) : null;
 

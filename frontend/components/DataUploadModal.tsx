@@ -151,7 +151,7 @@ export default function DataUploadModal({ isOpen, onClose, onSuccess }: DataUplo
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+      <div className="fixed inset-0 z-100 flex items-center justify-center p-4 sm:p-6">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -201,7 +201,7 @@ export default function DataUploadModal({ isOpen, onClose, onSuccess }: DataUplo
                   {s === 1 ? "Configuration" : s === 2 ? "Upload CSV" : "Review"}
                 </span>
                 {s < 3 && (
-                  <div className="mx-4 h-[1px] w-12 bg-slate-800" />
+                  <div className="mx-4 h-px w-12 bg-slate-800" />
                 )}
               </div>
             ))}
@@ -230,7 +230,7 @@ export default function DataUploadModal({ isOpen, onClose, onSuccess }: DataUplo
                     type="text"
                     value={metricConfig.name}
                     onChange={(e) => setMetricConfig({ ...metricConfig, name: e.target.value })}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-200 placeholder-slate-500 transition-colors focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-200 placeholder-slate-500 transition-colors focus:border-cyan-500 focus:outline-hidden focus:ring-1 focus:ring-cyan-500"
                     placeholder="e.g. Daily Active Users"
                   />
                 </div>
@@ -243,7 +243,7 @@ export default function DataUploadModal({ isOpen, onClose, onSuccess }: DataUplo
                     type="text"
                     value={metricConfig.unit || ""}
                     onChange={(e) => setMetricConfig({ ...metricConfig, unit: e.target.value })}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-200 placeholder-slate-500 transition-colors focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800/50 px-4 py-2.5 text-slate-200 placeholder-slate-500 transition-colors focus:border-cyan-500 focus:outline-hidden focus:ring-1 focus:ring-cyan-500"
                     placeholder="e.g. USD, Users, %"
                   />
                 </div>

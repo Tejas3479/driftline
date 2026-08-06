@@ -125,7 +125,7 @@ export default function CustomSelect({
           setIsOpen(!isOpen);
         }}
         onKeyDown={handleKeyDown}
-        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-900/70 px-3.5 py-2 text-xs font-semibold text-slate-200 shadow-sm transition hover:border-cyan-500/40 hover:bg-slate-900 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 glass-panel"
+        className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800/80 bg-slate-900/70 px-3.5 py-2 text-xs font-semibold text-slate-200 shadow-xs transition hover:border-cyan-500/40 hover:bg-slate-900 focus:border-cyan-400 focus:outline-hidden focus:ring-2 focus:ring-cyan-500/20 glass-panel"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
@@ -176,7 +176,7 @@ export default function CustomSelect({
                   <span className="truncate">{option.label}</span>
                   <div className="flex items-center gap-1.5 ml-2">
                     {option.badge && (
-                      <span className="rounded bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
+                      <span className="rounded-sm bg-slate-800/80 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
                         {option.badge}
                       </span>
                     )}
