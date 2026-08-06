@@ -12,6 +12,7 @@ from src.auth.schemas import UserRead
 from src.workspaces.schemas import WorkspaceUserCreate, UserUpdate
 from src.auth.security import get_password_hash
 from src.limiter import limiter
+from src.audit import audit_log
 
 from src.workspaces.service import (
     get_workspace as svc_get_workspace,
@@ -61,7 +62,10 @@ async def add_workspace_user(
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     try:
-        return await svc_add_user(db, workspace_id, user_in, current_user)
+        user = await svc_add_user(db, workspace_id, user_in, current_user)
+        audit_log("workspace.user_added", user_id=current_user.id, workspace_id=workspace_id,
+                 resource_type="user", resource_id=user.id, details={"email": user_in.email, "role": user_in.role})
+        return user
     except UnauthorizedError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
@@ -77,7 +81,10 @@ async def update_user_role(
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     try:
-        return await svc_update_role(db, user_id, update_data, current_user)
+        user = await svc_update_role(db, user_id, update_data, current_user)
+        audit_log("workspace.user_role_changed", user_id=current_user.id, workspace_id=current_user.workspace_id,
+                 resource_type="user", resource_id=user_id, details=update_data.model_dump(exclude_unset=True))
+        return user
     except UnauthorizedError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
@@ -95,6 +102,8 @@ async def remove_user(
 ) -> Any:
     try:
         await svc_remove_user(db, user_id, current_user)
+        audit_log("workspace.user_removed", user_id=current_user.id, workspace_id=current_user.workspace_id,
+                 resource_type="user", resource_id=user_id)
         return {"status": "success"}
     except UnauthorizedError as e:
         raise HTTPException(status_code=403, detail=str(e))

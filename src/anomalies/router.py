@@ -10,6 +10,7 @@ from src.anomalies.models import AnomalyTypeEnum, AnomalyStatusEnum
 from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema, AnomalyFeedbackSchema, GlobalAnomalyResponseSchema
 import src.anomalies.service as service
 from src.limiter import limiter
+from src.audit import audit_log
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -105,6 +106,9 @@ async def record_anomaly_feedback_endpoint(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        return await service.record_anomaly_feedback(db, id, schema.status, current_user.workspace_id)
+        result = await service.record_anomaly_feedback(db, id, schema.status, current_user.workspace_id)
+        audit_log("anomaly.feedback", user_id=current_user.id, workspace_id=current_user.workspace_id,
+                 resource_type="anomaly", resource_id=id, details={"new_status": schema.status})
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

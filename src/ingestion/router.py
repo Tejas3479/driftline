@@ -16,6 +16,7 @@ from src.ingestion.schemas import (
 )
 import src.ingestion.service as service
 from src.limiter import limiter
+from src.audit import audit_log
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -37,7 +38,10 @@ async def create_metric_endpoint(
     current_user: User = Depends(get_current_user)
 ):
     # Enforce metric belongs to current user's workspace
-    return await service.create_metric(db, schema, current_user.workspace_id)
+    metric = await service.create_metric(db, schema, current_user.workspace_id)
+    audit_log("metric.created", user_id=current_user.id, workspace_id=current_user.workspace_id,
+             resource_type="metric", resource_id=metric.id, details={"name": schema.name})
+    return metric
 
 @router.patch("/metrics/{id}", response_model=MetricResponseSchema)
 @limiter.limit("20/minute")
@@ -49,7 +53,10 @@ async def update_metric_endpoint(
     current_user: User = Depends(get_current_user)
 ):
     metric = await verify_metric_access(id, db, current_user.workspace_id)
-    return await service.update_metric(db, metric, schema)
+    result = await service.update_metric(db, metric, schema)
+    audit_log("metric.updated", user_id=current_user.id, workspace_id=current_user.workspace_id,
+             resource_type="metric", resource_id=id, details=schema.model_dump(exclude_unset=True))
+    return result
 
 @router.delete("/metrics/{id}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("20/minute")
@@ -61,6 +68,8 @@ async def delete_metric_endpoint(
 ):
     metric = await verify_metric_access(id, db, current_user.workspace_id)
     await service.delete_metric(db, metric)
+    audit_log("metric.deleted", user_id=current_user.id, workspace_id=current_user.workspace_id,
+             resource_type="metric", resource_id=id)
     return None
 
 @router.post("/metrics/{id}/data", response_model=InspectionResponseSchema)
@@ -104,6 +113,8 @@ async def confirm_data_endpoint(
     await verify_metric_access(id, db, current_user.workspace_id)
     try:
         result = await service.confirm_and_persist_observations(db, id, schema)
+        audit_log("metric.data_confirmed", user_id=current_user.id, workspace_id=current_user.workspace_id,
+                 resource_type="metric", resource_id=id, details={"rows_inserted": result.get("rows_inserted", 0)})
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

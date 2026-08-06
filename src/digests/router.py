@@ -11,6 +11,7 @@ from src.db.session import get_db
 from src.digests.schemas import DigestResponseSchema, DigestGenerateRequestSchema
 from src.digests.service import generate_weekly_digest, get_digest_by_id, list_digests
 from src.limiter import limiter
+from src.audit import audit_log
 
 router = APIRouter(dependencies=[Depends(get_current_user)], tags=["digests"])
 
@@ -66,6 +67,8 @@ async def generate_digest_endpoint(
     await verify_metric_access(payload.metric_id, db, current_user.workspace_id)
     try:
         digest = await generate_weekly_digest(db=db, workspace_id=current_user.workspace_id, metric_id=payload.metric_id)
+        audit_log("digest.generated", user_id=current_user.id, workspace_id=current_user.workspace_id,
+                 resource_type="digest", resource_id=digest.id, details={"metric_id": payload.metric_id})
         return DigestResponseSchema.model_validate(digest)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

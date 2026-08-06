@@ -19,6 +19,7 @@ from src.limiter import limiter
 from fastapi import Response
 
 from src.auth.service import register_user, authenticate_user
+from src.audit import audit_log
 
 logger = structlog.get_logger(__name__)
 
@@ -30,6 +31,8 @@ async def register(request: Request, user_in: UserCreate, db: AsyncSession = Dep
     logger.info("user_registration_attempt", email=user_in.email)
     try:
         user = await register_user(db, user_in)
+        audit_log("user.registered", user_id=user.id, user_email=user.email,
+                 workspace_id=user.workspace_id, resource_type="user", resource_id=user.id)
         return user
     except ValueError as e:
         raise HTTPException(
@@ -65,11 +68,15 @@ async def login(
         samesite=COOKIE_SAMESITE,
         max_age=COOKIE_MAX_AGE
     )
+    audit_log("user.login", user_id=user.id, user_email=user.email,
+             workspace_id=user.workspace_id, resource_type="user", resource_id=user.id)
     return {"status": "ok"}
 
 @router.post("/logout")
-async def logout(response: Response) -> Any:
+async def logout(response: Response, current_user: User = Depends(get_current_user)) -> Any:
     response.delete_cookie(key=COOKIE_NAME, httponly=COOKIE_HTTPONLY, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE)
+    audit_log("user.logout", user_id=current_user.id, user_email=current_user.email,
+             workspace_id=current_user.workspace_id, resource_type="user", resource_id=current_user.id)
     return {"status": "ok"}
 
 @router.get("/me", response_model=UserRead)

@@ -5,6 +5,7 @@ from src.ingestion.service import verify_metric_access
 from src.auth.models import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.limiter import limiter
+from src.audit import audit_log
 
 from src.db.session import get_db
 from src.alerts.schemas import (
@@ -36,6 +37,9 @@ async def create_or_update_alert_rule_endpoint(
     await verify_metric_access(payload.metric_id, db, current_user.workspace_id)
     try:
         rule = await create_or_update_alert_rule(db, payload)
+        audit_log("alert_rule.upserted", user_id=current_user.id, workspace_id=current_user.workspace_id,
+                 resource_type="alert_rule", resource_id=rule.id,
+                 details={"metric_id": payload.metric_id, "min_severity": payload.min_severity})
         channels_list = rule.channels.get("channels", []) if isinstance(rule.channels, dict) else rule.channels
         return AlertRuleResponseSchema(
             id=rule.id,
@@ -57,6 +61,8 @@ async def delete_alert_rule_endpoint(
     """Deletes an alert rule for a specific metric."""
     await verify_metric_access(metric_id, db, current_user.workspace_id)
     await delete_alert_rule(db, metric_id, current_user.workspace_id)
+    audit_log("alert_rule.deleted", user_id=current_user.id, workspace_id=current_user.workspace_id,
+             resource_type="alert_rule", details={"metric_id": metric_id})
     return None
 
 @router.get("/metrics/{metric_id}/alert-rules", response_model=List[AlertRuleResponseSchema])
