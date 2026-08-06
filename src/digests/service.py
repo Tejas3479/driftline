@@ -14,7 +14,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import AsyncSessionLocal
+from src.ingestion.models import Metric
 from src.anomalies.models import DailyRollup, Anomaly
+from src.forecasting.models import Forecast
 from src.digests.models import Digest
 
 logger = structlog.get_logger(__name__)
@@ -101,14 +103,12 @@ async def generate_weekly_digest(
     hist_cutoff = max_date - timedelta(days=30)
     recent_rollups = [r for r in total_rollups if r.date >= hist_cutoff]
 
-    from src.forecasting.models import Forecast
     forecast_stmt = select(Forecast).where(
         Forecast.metric_id == metric_id,
         Forecast.dimension_values == {}
     ).order_by(Forecast.forecast_date.asc())
     f_res = await db.execute(forecast_stmt)
     forecasts = list(f_res.scalars().all())
-    from src.ingestion.models import Metric
 
     # 7. Render Matplotlib PDF
     os.makedirs(STORAGE_DIR, exist_ok=True)

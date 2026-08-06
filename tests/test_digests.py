@@ -13,7 +13,8 @@ from src.ingestion.models import Metric, Observation
 from src.ingestion.service import create_metric, inspect_and_validate_csv, confirm_and_persist_observations
 from src.ingestion.schemas import MetricCreateSchema, DataConfirmSchema
 from src.digests.models import Digest
-from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest, generate_weekly_digest
+from src.digests.service import generate_weekly_digest
+from src.jobs.service import run_daily_pipeline, run_weekly_retrain_and_digest
 
 DEMO_CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "demo_data", "daily_revenue.csv")
 
