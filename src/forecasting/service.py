@@ -368,54 +368,62 @@ async def generate_multi_step_forecast(
         history_values = list(df_total["value"].values)
         history_dates = list(df_total.index)
         
-        for h in range(1, horizon_days + 1):
-            target_date = as_of_date + timedelta(days=h)
-            target_datetime = pd.to_datetime(target_date)
+        def _run_total_predictions():
+            local_total = {}
+            hist_vals = list(df_total["value"].values)
+            hist_dates = list(df_total.index)
             
-            s_val = pd.Series(history_values)
-            lag_1 = float(s_val.iloc[-1])
-            lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
-            lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
-            lag_28 = float(s_val.iloc[-28]) if len(s_val) >= 28 else lag_14
-            
-            rolling_mean_7 = float(s_val.tail(7).mean())
-            rolling_mean_28 = float(s_val.tail(28).mean())
-            rolling_std_7 = float(s_val.tail(7).std()) if len(s_val) >= 7 else 0.0
-            if np.isnan(rolling_std_7):
-                rolling_std_7 = 0.0
+            for h in range(1, horizon_days + 1):
+                target_date = as_of_date + timedelta(days=h)
+                target_datetime = pd.to_datetime(target_date)
                 
-            day_of_week = target_datetime.dayofweek
-            day_of_month = target_datetime.day
-            month = target_datetime.month
-            trend_index = last_trend + trend_slope * h
+                s_val = pd.Series(hist_vals)
+                lag_1 = float(s_val.iloc[-1])
+                lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
+                lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
+                lag_28 = float(s_val.iloc[-28]) if len(s_val) >= 28 else lag_14
+                
+                rolling_mean_7 = float(s_val.tail(7).mean())
+                rolling_mean_28 = float(s_val.tail(28).mean())
+                rolling_std_7 = float(s_val.tail(7).std()) if len(s_val) >= 7 else 0.0
+                if np.isnan(rolling_std_7):
+                    rolling_std_7 = 0.0
+                    
+                day_of_week = target_datetime.dayofweek
+                day_of_month = target_datetime.day
+                month = target_datetime.month
+                trend_index = last_trend + trend_slope * h
+                
+                feat_df = pd.DataFrame([{
+                    "lag_1": lag_1,
+                    "lag_7": lag_7,
+                    "lag_14": lag_14,
+                    "lag_28": lag_28,
+                    "rolling_mean_7": rolling_mean_7,
+                    "rolling_mean_28": rolling_mean_28,
+                    "rolling_std_7": rolling_std_7,
+                    "day_of_week": day_of_week,
+                    "day_of_month": day_of_month,
+                    "month": month,
+                    "trend_index": trend_index,
+                }])[FEATURE_COLUMNS]
+                
+                raw_p10 = float(model_p10.predict(feat_df)[0])
+                raw_p50 = float(model_p50.predict(feat_df)[0])
+                raw_p90 = float(model_p90.predict(feat_df)[0])
+                
+                p10, p50, p90 = enforce_quantile_non_crossing(raw_p10, raw_p50, raw_p90)
+                
+                local_total[target_date] = {
+                    "p10": float(p10),
+                    "p50": float(p50),
+                    "p90": float(p90),
+                }
+                hist_vals.append(float(p50))
+                hist_dates.append(target_datetime)
+            return local_total
             
-            feat_df = pd.DataFrame([{
-                "lag_1": lag_1,
-                "lag_7": lag_7,
-                "lag_14": lag_14,
-                "lag_28": lag_28,
-                "rolling_mean_7": rolling_mean_7,
-                "rolling_mean_28": rolling_mean_28,
-                "rolling_std_7": rolling_std_7,
-                "day_of_week": day_of_week,
-                "day_of_month": day_of_month,
-                "month": month,
-                "trend_index": trend_index,
-            }])[FEATURE_COLUMNS]
-            
-            raw_p10 = float(model_p10.predict(feat_df)[0])
-            raw_p50 = float(model_p50.predict(feat_df)[0])
-            raw_p90 = float(model_p90.predict(feat_df)[0])
-            
-            p10, p50, p90 = enforce_quantile_non_crossing(raw_p10, raw_p50, raw_p90)
-            
-            total_forecasts[target_date] = {
-                "p10": float(p10),
-                "p50": float(p50),
-                "p90": float(p90),
-            }
-            history_values.append(float(p50))
-            history_dates.append(target_datetime)
+        total_forecasts = await asyncio.to_thread(_run_total_predictions)
 
         # Process per-segment forecasts
         segment_rollups_map: Dict[str, List[DailyRollup]] = {}
@@ -463,58 +471,60 @@ async def generate_multi_step_forecast(
                 
             df_seg, s_m10, s_m50, s_m90 = await asyncio.to_thread(_prep_and_train_seg)
             
-            seg_history_vals = list(df_seg["value"].values)
-            seg_forecasts: Dict[date, Dict[str, float]] = {}
-            
-            for h in range(1, horizon_days + 1):
-                target_date = as_of_date + timedelta(days=h)
-                target_datetime = pd.to_datetime(target_date)
+            def _run_seg_predictions():
+                seg_history_vals = list(df_seg["value"].values)
+                seg_forecasts = {}
                 
-                s_val = pd.Series(seg_history_vals)
-                lag_1 = float(s_val.iloc[-1])
-                lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
-                lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
-                lag_28 = float(s_val.iloc[-28]) if len(s_val) >= 28 else lag_14
-                
-                rolling_mean_7 = float(s_val.tail(7).mean())
-                rolling_mean_28 = float(s_val.tail(28).mean())
-                rolling_std_7 = float(s_val.tail(7).std()) if len(s_val) >= 7 else 0.0
-                if np.isnan(rolling_std_7):
-                    rolling_std_7 = 0.0
+                for h in range(1, horizon_days + 1):
+                    target_date = as_of_date + timedelta(days=h)
+                    target_datetime = pd.to_datetime(target_date)
                     
-                day_of_week = target_datetime.dayofweek
-                day_of_month = target_datetime.day
-                month = target_datetime.month
-                trend_index = float(s_val.iloc[-1])
-                
-                feat_df = pd.DataFrame([{
-                    "lag_1": lag_1,
-                    "lag_7": lag_7,
-                    "lag_14": lag_14,
-                    "lag_28": lag_28,
-                    "rolling_mean_7": rolling_mean_7,
-                    "rolling_mean_28": rolling_mean_28,
-                    "rolling_std_7": rolling_std_7,
-                    "day_of_week": day_of_week,
-                    "day_of_month": day_of_month,
-                    "month": month,
-                    "trend_index": trend_index,
-                }])[FEATURE_COLUMNS]
-                
-                s_raw_10 = float(s_m10.predict(feat_df)[0])
-                s_raw_50 = float(s_m50.predict(feat_df)[0])
-                s_raw_90 = float(s_m90.predict(feat_df)[0])
-                
-                sp10, sp50, sp90 = enforce_quantile_non_crossing(s_raw_10, s_raw_50, s_raw_90)
-                
-                seg_forecasts[target_date] = {
-                    "p10": float(sp10),
-                    "p50": float(sp50),
-                    "p90": float(sp90),
-                }
-                seg_history_vals.append(float(sp50))
-                
-            raw_segment_forecasts_map[seg_key] = seg_forecasts
+                    s_val = pd.Series(seg_history_vals)
+                    lag_1 = float(s_val.iloc[-1])
+                    lag_7 = float(s_val.iloc[-7]) if len(s_val) >= 7 else lag_1
+                    lag_14 = float(s_val.iloc[-14]) if len(s_val) >= 14 else lag_7
+                    lag_28 = float(s_val.iloc[-28]) if len(s_val) >= 28 else lag_14
+                    
+                    rolling_mean_7 = float(s_val.tail(7).mean())
+                    rolling_mean_28 = float(s_val.tail(28).mean())
+                    rolling_std_7 = float(s_val.tail(7).std()) if len(s_val) >= 7 else 0.0
+                    if np.isnan(rolling_std_7):
+                        rolling_std_7 = 0.0
+                        
+                    day_of_week = target_datetime.dayofweek
+                    day_of_month = target_datetime.day
+                    month = target_datetime.month
+                    trend_index = float(s_val.iloc[-1])
+                    
+                    feat_df = pd.DataFrame([{
+                        "lag_1": lag_1,
+                        "lag_7": lag_7,
+                        "lag_14": lag_14,
+                        "lag_28": lag_28,
+                        "rolling_mean_7": rolling_mean_7,
+                        "rolling_mean_28": rolling_mean_28,
+                        "rolling_std_7": rolling_std_7,
+                        "day_of_week": day_of_week,
+                        "day_of_month": day_of_month,
+                        "month": month,
+                        "trend_index": trend_index,
+                    }])[FEATURE_COLUMNS]
+                    
+                    s_raw_10 = float(s_m10.predict(feat_df)[0])
+                    s_raw_50 = float(s_m50.predict(feat_df)[0])
+                    s_raw_90 = float(s_m90.predict(feat_df)[0])
+                    
+                    sp10, sp50, sp90 = enforce_quantile_non_crossing(s_raw_10, s_raw_50, s_raw_90)
+                    
+                    seg_forecasts[target_date] = {
+                        "p10": float(sp10),
+                        "p50": float(sp50),
+                        "p90": float(sp90),
+                    }
+                    seg_history_vals.append(float(sp50))
+                return seg_forecasts
+
+            raw_segment_forecasts_map[seg_key] = await asyncio.to_thread(_run_seg_predictions)
 
         reconciled_segment_forecasts_map = reconcile_segment_forecasts(
             total_forecasts, raw_segment_forecasts_map
