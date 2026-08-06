@@ -424,6 +424,7 @@ async def delete_metric(db: AsyncSession, metric: Metric) -> None:
     """
     Delete a metric configuration and all related cascading data.
     """
+    await db.delete(metric)
     await db.commit()
 
 async def verify_metric_access(metric_id: int, db: AsyncSession, workspace_id: int) -> Metric:
