@@ -74,7 +74,13 @@ async def upload_and_inspect_data_endpoint(
 ):
     metric = await verify_metric_access(id, db, current_user.workspace_id)
     
+    MAX_UPLOAD_BYTES = 50 * 1024 * 1024 # 50 MB
+    if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
+        
     file_bytes = await file.read()
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
     result = await asyncio.to_thread(service.inspect_and_validate_csv, metric, file_bytes)
     return {
         "metric_id": id,
