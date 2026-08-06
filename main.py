@@ -18,7 +18,7 @@ from src.alerts.router import router as alerts_router
 from src.auth.router import router as auth_router
 from src.workspaces.router import router as workspaces_router
 from src.telemetry import setup_telemetry
-from src.digests.service import run_daily_pipeline, run_weekly_retrain_and_digest
+from src.jobs.service import run_daily_pipeline, run_weekly_retrain_and_digest
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from src.limiter import limiter
