@@ -78,9 +78,12 @@ async def upload_and_inspect_data_endpoint(
     if file.size is not None and file.size > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
         
-    file_bytes = await file.read()
-    if len(file_bytes) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
+    file_bytes = bytearray()
+    while chunk := await file.read(1024 * 1024):  # 1MB chunks
+        file_bytes.extend(chunk)
+        if len(file_bytes) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
+    file_bytes = bytes(file_bytes)
     result = await asyncio.to_thread(service.inspect_and_validate_csv, metric, file_bytes)
     return {
         "metric_id": id,
