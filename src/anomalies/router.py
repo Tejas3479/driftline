@@ -92,10 +92,10 @@ async def get_anomaly_detail_endpoint(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    anomaly = await service.get_anomaly_detail(db, id, current_user.workspace_id)
-    if not anomaly:
+    detail = await service.get_anomaly_detail(db, id, current_user.workspace_id)
+    if not detail:
         raise HTTPException(status_code=404, detail=f"Anomaly with id {id} not found.")
-    return anomaly
+    return detail["anomaly"]
 
 @router.post("/anomalies/{id}/feedback", response_model=AnomalyDetailResponseSchema)
 async def record_anomaly_feedback_endpoint(
