@@ -1,4 +1,4 @@
-# BUILD LOG
+﻿# BUILD LOG
 
 ## Session 1: Initial Repository Scaffolding
 - Built initial repository skeleton for Driftline including domain modules (`src/db`, `src/ingestion`, `src/anomalies`, `src/drivers`, `src/forecasting`, `src/digests`, `src/alerts`), `main.py` FastAPI app with `/health` endpoint, async SQLAlchemy 2.0 session handling, Next.js (App Router) + TypeScript + Tailwind frontend placeholder, and Docker Compose environment with Postgres 16.
@@ -38,7 +38,7 @@
 - Scoped CORS origins in `main.py` strictly to `http://localhost:3000` (omitting credentials).
 - Extracted a single shared helper function `compute_scaled_mad(residuals, values) -> Optional[float]` in `src/anomalies/service.py` to prevent statistical calculation drift.
 - Extended `/metrics/{id}/timeseries` to return the stable pre-computed `mad` value of the entire metric timeseries history.
-- Built dynamic frontend pages and components: Overview list card layout with inline SVG sparklines, warning banners with expected-value check division-by-zero guards, and a dynamic-imported `react-plotly.js` component with range filtering, shaded baseline bounds (`trend ± MAD`), and type-distinct markers/lines.
+- Built dynamic frontend pages and components: Overview list card layout with inline SVG sparklines, warning banners with expected-value check division-by-zero guards, and a dynamic-imported `react-plotly.js` component with range filtering, shaded baseline bounds (`trend Â± MAD`), and type-distinct markers/lines.
 - Wrote frontend Vitest unit test suites mock-verifying rendering, banners, filtering, and Plotly marker shapes counts, and added `test_timeseries_mad_consistency` backend test.
 - Next session context: Overview dashboard and time-series detail page are fully operational. 16/16 backend tests passing, 3/3 frontend tests passing. Ready for Session 7 (IsolationForest anomaly classification & real severity scoring).
 
@@ -129,16 +129,16 @@
 ## Session 17: Synthetic Data Generator with Ground Truth Injection & Determinism Test
 - Built `scripts/generate_synthetic_data.py` generating 2 full calendar years (731 days: `2024-01-01` to `2025-12-31` inclusive, accounting for leap year 2024) of daily MRR data across 9 segment combinations ($731 \times 9 = 6,579$ rows) saved to canonical path `demo_data/synthetic_mrr.csv`.
 - Generated `scripts/synthetic_ground_truth.json` recording 4 injected ground-truth anomalies:
-  1. SPIKE: `2024-04-29` (Day 120) — Paid channel promotional spike ($+\$8,000.00$ total / $+\$2,666.67$ per segment).
-  2. DIP: `2024-10-06` (Day 280) — Enterprise plan revenue drop ($-\$6,500.00$ total / $-\$2,166.67$ per segment).
-  3. LEVEL-SHIFT: `2025-03-25` to `2025-12-31` (Days 450..731) — Global pricing $+15.0\%$ step increase across all segments (`tolerance_window_days: {"before": 0, "after": 30}`).
-  4. VOLATILITY: `2025-08-22` to `2025-09-05` (Days 600..614) — Self-serve plan noise scaled by $\times 4.5$ ($\text{noise}_{\text{vol}} = 4.5 \times \text{noise}_{\text{base}}$) on top of level-shifted baseline.
+  1. SPIKE: `2024-04-29` (Day 120) â€” Paid channel promotional spike ($+\$8,000.00$ total / $+\$2,666.67$ per segment).
+  2. DIP: `2024-10-06` (Day 280) â€” Enterprise plan revenue drop ($-\$6,500.00$ total / $-\$2,166.67$ per segment).
+  3. LEVEL-SHIFT: `2025-03-25` to `2025-12-31` (Days 450..731) â€” Global pricing $+15.0\%$ step increase across all segments (`tolerance_window_days: {"before": 0, "after": 30}`).
+  4. VOLATILITY: `2025-08-22` to `2025-09-05` (Days 600..614) â€” Self-serve plan noise scaled by $\times 4.5$ ($\text{noise}_{\text{vol}} = 4.5 \times \text{noise}_{\text{base}}$) on top of level-shifted baseline.
 - Wrote [tests/test_synthetic_generator.py](file:///c:/Users/tejas/Downloads/driftline/tests/test_synthetic_generator.py) testing byte-for-byte determinism (`seed=42`), schema structure (6,579 rows), and diff-based numerical correctness ($\Delta = \text{Series}_{\text{injected}} - \text{Series}_{\text{base}}$).
 - Decisions: Used `np.random.default_rng(seed)` for modern random generator isolation, explicitly cast all NumPy values to native Python types before JSON serialization, applied cumulative anomaly ordering, and recorded explicit asymmetric tolerance windows.
 - Next session context: Synthetic 2-year 9-segment dataset and ground-truth specification are generated and verified. Ready for Session 18 (End-to-end evaluation benchmark: precision/recall, driver attribution accuracy, forecast backtest MAPE).
 
 ## Session 18: Whole-Pipeline Evaluation Benchmark & Quality Regression Test Suite
-- Built permanent evaluation benchmark script [scripts/evaluate_pipeline.py](file:///c:/Users/tejas/Downloads/driftline/scripts/evaluate_pipeline.py) running full pipeline (ingestion → decomposition → anomaly detection → driver analysis → CatBoost structural importance → 12-week walk-forward backtest → 30-day quantile forecasting) against Session 17 synthetic dataset (`demo_data/synthetic_mrr.csv`).
+- Built permanent evaluation benchmark script [scripts/evaluate_pipeline.py](file:///c:/Users/tejas/Downloads/driftline/scripts/evaluate_pipeline.py) running full pipeline (ingestion â†’ decomposition â†’ anomaly detection â†’ driver analysis â†’ CatBoost structural importance â†’ 12-week walk-forward backtest â†’ 30-day quantile forecasting) against Session 17 synthetic dataset (`demo_data/synthetic_mrr.csv`).
 - Evaluated model outputs against `scripts/synthetic_ground_truth.json`:
   | METRIC NAME | VALUE | BENCHMARK TARGET | STATUS |
   |---|---|---|---|
@@ -192,11 +192,11 @@
 ## Session 14: Premium UI Transformation & Cinematic Landing Page
 - Built 12 reusable animation components: SmoothScroll (Lenis), ScrollReveal (GSAP), TextReveal, TypewriterText, AnimatedCounter, AtroposCard (3D tilt), CustomCursor (dot+ring), GlowButton, MeteorShower, GrainOverlay, UISoundEngine (Web Audio API), upgraded PageTransition (spring+blur).
 - Created cinematic 7-section landing page: hero with animated mesh gradient + floating orbs + meteor shower + typewriter cycling headline + trust metric pills, tech trust strip, feature bento grid (6 cards), 3-step "how it works" timeline, performance stats with animated counters, open-source CTA, minimal footer.
-- Restructured routes into `(landing)` and `(dashboard)` route groups: `/` → landing, `/dashboard` → overview. Simplified root layout to minimal HTML shell, created per-group layouts with appropriate providers.
+- Restructured routes into `(landing)` and `(dashboard)` route groups: `/` â†’ landing, `/dashboard` â†’ overview. Simplified root layout to minimal HTML shell, created per-group layouts with appropriate providers.
 - Expanded design system: 25+ Tailwind tokens (surface colors, accent palette, glow shadows), 8 custom animations (float, grain, meteor, pulse-glow, border-spin), glassmorphism layers (glass-card-sm/lg), mesh gradient backgrounds, CSS `@property` animated border.
 - Polished all dashboard pages: glass-card containers, ScrollReveal wrapping, hover glow effects, backdrop-blur, upgraded stat card styling across overview, anomaly log, anomaly detail, metric detail, forecast, and settings pages. Upgraded all chart containers (MetricChart, ForecastVsActualChart, SegmentBarChart, SegmentComparisonChart) to glass frames.
 - Created mobile hooks: useDeviceOrientation (gyro tilt), useHaptics (vibration patterns).
-- Fixed 4 pre-existing build errors: vega-canvas webpack fallback, ForecastStatsPanel TS narrowing, Plotly font→tickfont axis type, Plotly Dash type assertion.
+- Fixed 4 pre-existing build errors: vega-canvas webpack fallback, ForecastStatsPanel TS narrowing, Plotly fontâ†’tickfont axis type, Plotly Dash type assertion.
 - Decisions: Used Web Audio API directly instead of Tone.js for lighter procedural UI audio; kept all data fetching and business logic completely untouched.
 - Next session context: Full build passing (`npm run build` green, 9 routes). Next priorities: integrate CustomCursor + UISoundEngine into layouts, add Lenis smooth scrolling, create remaining mobile integrations, and visual QA in the browser.
 
@@ -269,5 +269,4 @@
 - Updated API_BASE_URL in rontend/app/api.ts to natively use /api/v1 and added proxy rewrites in rontend/next.config.js to properly route /api/v1 calls to the backend from port 3000.
 
 
- -   * * S e s s i o n   2 0 2 6 - 0 8 - 0 1   ( P h a s e   2   c o m p l e t i o n ) * * :   F i x e d   a l l   r e g r e s s i o n   t e s t s   c a u s e d   b y   U R L   p r e f i x   c h a n g e s   a n d   d e p e n d e n c y   o v e r r i d i n g .   F i x e d   a   s i l e n t   t e s t   f a l s e   p o s i t i v e   i n   \ 	 e s t _ a n o m a l i e s . p y \   c a u s e d   b y   a n   e a r l i e r   i n c r e m e n t a l   r o l l u p   o p t i m i z a t i o n .   R e f a c t o r e d   t e s t   s e t u p   t o   p r e v e n t   a s y n c p g   c o n n e c t i o n   l e a k s   d u r i n g   g e n e r a t o r   s h u t d o w n   i n   \ c o n f t e s t . p y \ .   E n t i r e   p y t e s t   s u i t e   ( 5 3   t e s t s )   i s   g r e e n   a n d   r o b u s t .  
- 
+- **Session 2026-08-01 (Phase 2 completion)**: Fixed all regression tests caused by URL prefix changes and dependency overriding. Fixed a silent test false positive in 	est_anomalies.py caused by an earlier incremental rollup optimization. Refactored test setup to prevent asyncpg connection leaks during generator shutdown in conftest.py. Entire pytest suite (53 tests) is green and robust.
