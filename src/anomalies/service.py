@@ -114,8 +114,17 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
             timeseries_groups.append(({dim_name: dim_val}, filtered_obs))
 
     # Fetch existing rollups for historical context (bounded O(Days * Dims) memory)
+    # Cap history to 90 days to compute 28-day rolling window + robust seasonal medians without unbounded memory growth
+    min_new_date = min(obs.date for obs in new_observations) if new_observations else date.min
+    hist_cutoff = min_new_date - timedelta(days=90)
+    
     existing_res = await db.execute(
-        select(DailyRollup).where(DailyRollup.metric_id == metric_id).order_by(DailyRollup.date)
+        select(DailyRollup)
+        .where(
+            DailyRollup.metric_id == metric_id,
+            DailyRollup.date >= hist_cutoff
+        )
+        .order_by(DailyRollup.date)
     )
     existing_rollups = existing_res.scalars().all()
 
