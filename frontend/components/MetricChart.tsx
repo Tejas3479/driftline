@@ -250,49 +250,92 @@ export default function MetricChart({
 
   return (
     <div className="w-full glass-card-lg rounded-xl p-4 shadow-2xl">
-      <Plot
-        data={data}
-        layout={{
-          autosize: true,
-          height: 500,
-          margin: { l: 60, r: 20, t: 30, b: 60 },
-          paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(0,0,0,0)",
-          xaxis: {
-            gridcolor: "#1e293b",
-            zerolinecolor: "#334155",
-            tickcolor: "#334155",
-            tickfont: { color: "#94a3b8" },
-            type: "date",
-          },
-          yaxis: {
-            gridcolor: "#1e293b",
-            zerolinecolor: "#334155",
-            tickcolor: "#334155",
-            tickfont: { color: "#94a3b8" },
-            title: unit ? { text: unit, font: { color: "#94a3b8", size: 12 } } : undefined,
-          },
-          legend: {
-            font: { color: "#cbd5e1", size: 11 },
-            orientation: "h",
-            yanchor: "bottom",
-            y: 1.02,
-            xanchor: "right",
-            x: 1,
-          },
-          shapes: shapes,
-          hoverlabel: {
-            bgcolor: "#0f172a",
-            bordercolor: "#334155",
-            font: { color: "#f8fafc", size: 13 },
-          },
-        }}
-        config={{
-          responsive: true,
-          displayModeBar: false,
-        }}
-        className="w-full"
-      />
+      <div aria-hidden="true">
+        <Plot
+          data={data}
+          layout={{
+            autosize: true,
+            height: 500,
+            margin: { l: 60, r: 20, t: 30, b: 60 },
+            paper_bgcolor: "rgba(0,0,0,0)",
+            plot_bgcolor: "rgba(0,0,0,0)",
+            xaxis: {
+              gridcolor: "#1e293b",
+              zerolinecolor: "#334155",
+              tickcolor: "#334155",
+              tickfont: { color: "#94a3b8" },
+              type: "date",
+            },
+            yaxis: {
+              gridcolor: "#1e293b",
+              zerolinecolor: "#334155",
+              tickcolor: "#334155",
+              tickfont: { color: "#94a3b8" },
+              title: unit ? { text: unit, font: { color: "#94a3b8", size: 12 } } : undefined,
+            },
+            legend: {
+              font: { color: "#cbd5e1", size: 11 },
+              orientation: "h",
+              yanchor: "bottom",
+              y: 1.02,
+              xanchor: "right",
+              x: 1,
+            },
+            shapes: shapes,
+            hoverlabel: {
+              bgcolor: "#0f172a",
+              bordercolor: "#334155",
+              font: { color: "#f8fafc", size: 13 },
+            },
+          }}
+          config={{
+            responsive: true,
+            displayModeBar: false,
+          }}
+          className="w-full"
+        />
+      </div>
+
+      {/* Screen Reader Only Data Table */}
+      <table className="sr-only">
+        <caption>Metric Timeseries Data Table with Anomalies and Forecasts</caption>
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Actual Value</th>
+            <th scope="col">Trend</th>
+            <th scope="col">Anomaly Detected</th>
+            <th scope="col">Forecast (p50)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(() => {
+            // Combine all unique dates from points and forecastPoints
+            const allDates = Array.from(
+              new Set([
+                ...(points?.map(p => p.date) || []),
+                ...(forecastPoints?.map(f => f.forecast_date) || [])
+              ])
+            ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+            return allDates.map((date, idx) => {
+              const pt = points?.find(p => p.date === date);
+              const anom = anomalies?.find(a => a.date === date);
+              const fpt = forecastPoints?.find(f => f.forecast_date === date);
+
+              return (
+                <tr key={idx}>
+                  <th scope="row">{date}</th>
+                  <td>{pt ? pt.value_total : "N/A"}</td>
+                  <td>{pt && pt.trend !== null ? pt.trend : "N/A"}</td>
+                  <td>{anom ? anom.type.replace("_", " ") : "None"}</td>
+                  <td>{fpt && fpt.p50 !== null ? fpt.p50 : "N/A"}</td>
+                </tr>
+              );
+            });
+          })()}
+        </tbody>
+      </table>
     </div>
   );
 }

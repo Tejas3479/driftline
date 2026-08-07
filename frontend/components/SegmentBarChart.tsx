@@ -146,56 +146,87 @@ export default function SegmentBarChart({
 
       {/* Plotly Horizontal Bar Chart */}
       <div className="w-full">
-        <Plot
-          data={[
-            {
-              type: "bar",
-              orientation: "h",
-              x: contribPcts,
-              y: barLabels,
-              text: customText,
-              hoverinfo: "text",
-              marker: {
-                color: colors,
-                opacity: 0.9,
-                line: {
-                  color: "#0f172a",
-                  width: 1.5,
+        <div aria-hidden="true">
+          <Plot
+            data={[
+              {
+                type: "bar",
+                orientation: "h",
+                x: contribPcts,
+                y: barLabels,
+                text: customText,
+                hoverinfo: "text",
+                marker: {
+                  color: colors,
+                  opacity: 0.9,
+                  line: {
+                    color: "#0f172a",
+                    width: 1.5,
+                  },
                 },
               },
-            },
-          ]}
-          layout={{
-            autosize: true,
-            height: Math.max(260, sortedSegments.length * 45),
-            margin: { l: 120, r: 40, t: 10, b: 40 },
-            paper_bgcolor: "rgba(0,0,0,0)",
-            plot_bgcolor: "rgba(0,0,0,0)",
-            xaxis: {
-              title: { text: "Contribution % of Total Delta", font: { color: "#94a3b8", size: 11 } },
-              gridcolor: "#1e293b",
-              zerolinecolor: "#334155",
-              tickcolor: "#334155",
-              tickfont: { color: "#94a3b8", size: 11 },
-            },
-            yaxis: {
-              gridcolor: "transparent",
-              tickcolor: "#334155",
-              tickfont: { color: "#cbd5e1", size: 12 },
-            },
-            hoverlabel: {
-              bgcolor: "#0f172a",
-              bordercolor: "#334155",
-              font: { color: "#f8fafc", size: 12 },
-            },
-          }}
-          config={{
-            responsive: true,
-            displayModeBar: false,
-          }}
-          onClick={handlePlotClick}
-          className="w-full"
-        />
+            ]}
+            layout={{
+              autosize: true,
+              height: Math.max(260, sortedSegments.length * 45),
+              margin: { l: 120, r: 40, t: 10, b: 40 },
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(0,0,0,0)",
+              xaxis: {
+                title: { text: "Contribution % of Total Delta", font: { color: "#94a3b8", size: 11 } },
+                gridcolor: "#1e293b",
+                zerolinecolor: "#334155",
+                tickcolor: "#334155",
+                tickfont: { color: "#94a3b8", size: 11 },
+              },
+              yaxis: {
+                gridcolor: "transparent",
+                tickcolor: "#334155",
+                tickfont: { color: "#cbd5e1", size: 12 },
+              },
+              hoverlabel: {
+                bgcolor: "#0f172a",
+                bordercolor: "#334155",
+                font: { color: "#f8fafc", size: 12 },
+              },
+            }}
+            config={{
+              responsive: true,
+              displayModeBar: false,
+            }}
+            onClick={handlePlotClick}
+            className="w-full"
+          />
+        </div>
+
+        {/* Screen Reader Only Data Table */}
+        <table className="sr-only">
+          <caption>Segment Contribution Drivers Data Table</caption>
+          <thead>
+            <tr>
+              <th scope="col">Dimension</th>
+              <th scope="col">Segment Value</th>
+              <th scope="col">Contribution %</th>
+              <th scope="col">Delta Value</th>
+              <th scope="col">Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedSegments.map((s, idx) => {
+              const isHelped = isUpIsGood ? s.delta > 0 : s.delta < 0;
+              const impactWord = isHelped ? "Helped" : "Hurt";
+              return (
+                <tr key={idx}>
+                  <th scope="row">{s.dimension}</th>
+                  <td>{s.segment_value}</td>
+                  <td>{(s.contribution_pct * 100).toFixed(1)}%</td>
+                  <td>{s.delta > 0 ? `+${s.delta.toFixed(2)}` : s.delta.toFixed(2)}</td>
+                  <td>{impactWord}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Legend / Color explanation */}

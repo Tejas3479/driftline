@@ -136,48 +136,75 @@ export default function ForecastVsActualChart({
           {sortedPoints.length} evaluated fold dates
         </span>
       </div>
-      <Plot
-        data={data}
-        layout={{
-          autosize: true,
-          height: 340,
-          margin: { l: 50, r: 20, t: 20, b: 50 },
-          paper_bgcolor: "rgba(0,0,0,0)",
-          plot_bgcolor: "rgba(0,0,0,0)",
-          xaxis: {
-            gridcolor: "#1e293b",
-            zerolinecolor: "#334155",
-            tickcolor: "#334155",
-            tickfont: { color: "#94a3b8", size: 11 },
-            type: "date",
-          },
-          yaxis: {
-            gridcolor: "#1e293b",
-            zerolinecolor: "#334155",
-            tickcolor: "#334155",
-            tickfont: { color: "#94a3b8", size: 11 },
-            title: unit ? { text: unit, font: { color: "#94a3b8", size: 11 } } : undefined,
-          },
-          legend: {
-            font: { color: "#cbd5e1", size: 10 },
-            orientation: "h",
-            yanchor: "bottom",
-            y: 1.02,
-            xanchor: "right",
-            x: 1,
-          },
-          hoverlabel: {
-            bgcolor: "#0f172a",
-            bordercolor: "#334155",
-            font: { color: "#f8fafc", size: 12 },
-          },
-        }}
-        config={{
-          responsive: true,
-          displayModeBar: false,
-        }}
-        className="w-full"
-      />
+      <div aria-hidden="true">
+        <Plot
+          data={data}
+          layout={{
+            autosize: true,
+            height: 340,
+            margin: { l: 50, r: 20, t: 20, b: 50 },
+            paper_bgcolor: "rgba(0,0,0,0)",
+            plot_bgcolor: "rgba(0,0,0,0)",
+            xaxis: {
+              gridcolor: "#1e293b",
+              zerolinecolor: "#334155",
+              tickcolor: "#334155",
+              tickfont: { color: "#94a3b8", size: 11 },
+              type: "date",
+            },
+            yaxis: {
+              gridcolor: "#1e293b",
+              zerolinecolor: "#334155",
+              tickcolor: "#334155",
+              tickfont: { color: "#94a3b8", size: 11 },
+              title: unit ? { text: unit, font: { color: "#94a3b8", size: 11 } } : undefined,
+            },
+            legend: {
+              font: { color: "#cbd5e1", size: 10 },
+              orientation: "h",
+              yanchor: "bottom",
+              y: 1.02,
+              xanchor: "right",
+              x: 1,
+            },
+            hoverlabel: {
+              bgcolor: "#0f172a",
+              bordercolor: "#334155",
+              font: { color: "#f8fafc", size: 12 },
+            },
+          }}
+          config={{
+            responsive: true,
+            displayModeBar: false,
+          }}
+          className="w-full"
+        />
+      </div>
+
+      {/* Screen Reader Only Data Table */}
+      <table className="sr-only">
+        <caption>Forecast vs. Actual Track Record Data Table</caption>
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Actual Value</th>
+            <th scope="col">ML Predicted (p50)</th>
+            <th scope="col">Lower Bound (p10)</th>
+            <th scope="col">Upper Bound (p90)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPoints.map((p, idx) => (
+            <tr key={idx}>
+              <th scope="row">{p.date}</th>
+              <td>{p.actual !== null ? p.actual : "N/A"}</td>
+              <td>{p.predicted_p50 !== null ? p.predicted_p50 : "N/A"}</td>
+              <td>{p.predicted_p10 !== null ? p.predicted_p10 : "N/A"}</td>
+              <td>{p.predicted_p90 !== null ? p.predicted_p90 : "N/A"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
