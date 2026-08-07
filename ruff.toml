@@ -13,6 +13,7 @@ ignore = [
     "G201",    # Logging .exception instead of .error(exc_info=True)
     "SIM102",  # Use a single `if` statement instead of nested `if` statements
     "PLW1508", # Invalid type for environment variable default; expected `str` or `None`
+    "EXE001",  # Shebang is present but file is not executable (Windows/git compatibility)
 ]
 
 [lint.per-file-ignores]
