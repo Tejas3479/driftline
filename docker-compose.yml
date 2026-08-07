@@ -23,7 +23,7 @@ services:
       dockerfile: Dockerfile
     container_name: driftline-backend
     restart: always
-    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    command: sh -c "alembic upgrade head && gunicorn main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
     volumes:
       - .:/app
       - ./demo_data:/app/demo_data
