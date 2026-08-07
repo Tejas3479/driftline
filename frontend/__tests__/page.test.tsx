@@ -13,13 +13,19 @@ vi.mock("../app/api", () => {
   };
 });
 
+// Mock SWR hook
+vi.mock("@/hooks/useApi", () => ({
+  useApi: vi.fn()
+}));
+
+import { useApi } from "@/hooks/useApi";
+
 describe("Overview Page Rendering", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
   test("renders list of metrics and displays the active anomaly warning banner", async () => {
-    // 1. Mock fetchMetrics returning 1 metric
     const mockMetric: api.Metric = {
       id: 1,
       workspace_id: 1,
@@ -28,13 +34,11 @@ describe("Overview Page Rendering", () => {
       direction_good: "up_is_good",
       sensitivity: "medium",
       grain: "daily",
-    z_score_weight: 1.0,
-    structural_importance: [],
+      z_score_weight: 1.0,
+      structural_importance: [],
       created_at: "2026-07-21T00:00:00Z",
     };
-    vi.mocked(api.fetchMetrics).mockResolvedValue([mockMetric]);
 
-    // 2. Mock fetchTimeseries returning 2 points
     const mockTimeseries: api.TimeseriesResponse = {
       metric_id: 1,
       mad: 5.0,
@@ -57,9 +61,7 @@ describe("Overview Page Rendering", () => {
         },
       ],
     };
-    vi.mocked(api.fetchTimeseries).mockResolvedValue(mockTimeseries);
 
-    // 3. Mock fetchAnomalies returning a recent unreviewed anomaly on the last date (2026-07-21)
     const mockAnomalies: api.Anomaly[] = [
       {
         id: 10,
@@ -74,7 +76,14 @@ describe("Overview Page Rendering", () => {
         created_at: "2026-07-21T00:00:00Z",
       },
     ];
-    vi.mocked(api.fetchAnomalies).mockResolvedValue(mockAnomalies);
+    
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/timeseries")) return { data: mockTimeseries, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/anomalies")) return { data: mockAnomalies, isLoading: false, error: null, mutate: vi.fn() };
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
 
     render(<Home />);
 
@@ -102,11 +111,10 @@ describe("Overview Page Rendering", () => {
       direction_good: "up_is_good",
       sensitivity: "medium",
       grain: "daily",
-    z_score_weight: 1.0,
-    structural_importance: [],
+      z_score_weight: 1.0,
+      structural_importance: [],
       created_at: "2026-07-21T00:00:00Z",
     };
-    vi.mocked(api.fetchMetrics).mockResolvedValue([mockMetric]);
 
     const mockTimeseries: api.TimeseriesResponse = {
       metric_id: 1,
@@ -130,9 +138,7 @@ describe("Overview Page Rendering", () => {
         },
       ],
     };
-    vi.mocked(api.fetchTimeseries).mockResolvedValue(mockTimeseries);
 
-    // Mock reviewed anomaly (should not trigger overview banner)
     const mockAnomalies: api.Anomaly[] = [
       {
         id: 10,
@@ -147,7 +153,14 @@ describe("Overview Page Rendering", () => {
         created_at: "2026-07-21T00:00:00Z",
       },
     ];
-    vi.mocked(api.fetchAnomalies).mockResolvedValue(mockAnomalies);
+
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/timeseries")) return { data: mockTimeseries, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/anomalies")) return { data: mockAnomalies, isLoading: false, error: null, mutate: vi.fn() };
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
 
     render(<Home />);
 

@@ -27,6 +27,13 @@ vi.mock("../app/api", () => {
   };
 });
 
+// Mock SWR hook
+vi.mock("@/hooks/useApi", () => ({
+  useApi: vi.fn()
+}));
+
+import { useApi } from "@/hooks/useApi";
+
 // Mock next/dynamic to render SegmentComparisonChart synchronously in tests
 vi.mock("next/dynamic", () => {
   return {
@@ -76,6 +83,17 @@ describe("Segment Comparison Page & Vega-Embed Component Test Suite", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) {
+        return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      }
+      if (url.includes("/segments")) {
+        return { data: mockVegaSpec, isLoading: false, error: null, mutate: vi.fn() };
+      }
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
   });
 
   test("SegmentComparisonChart component mounts cleanly and invokes vega-embed with spec", async () => {
@@ -93,8 +111,7 @@ describe("Segment Comparison Page & Vega-Embed Component Test Suite", () => {
   });
 
   test("SegmentComparisonPage renders metric header, callout banner, and chart spec", async () => {
-    vi.mocked(api.fetchMetrics).mockResolvedValue([mockMetric]);
-    vi.mocked(api.fetchSegmentComparison).mockResolvedValue(mockVegaSpec);
+    // Handled by useApi mock in beforeEach
 
     render(<SegmentComparisonPage params={{ id: "1" }} />);
 

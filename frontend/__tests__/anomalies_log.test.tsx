@@ -11,6 +11,13 @@ vi.mock("../app/api", () => {
   };
 });
 
+// Mock SWR hook
+vi.mock("@/hooks/useApi", () => ({
+  useApi: vi.fn()
+}));
+
+import { useApi } from "@/hooks/useApi";
+
 describe("Global Anomaly Log Page Component Test Suite", () => {
   const mockAnomalies: api.GlobalAnomaly[] = [
     {
@@ -57,15 +64,18 @@ describe("Global Anomaly Log Page Component Test Suite", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: [], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("status=new")) {
+        return { data: mockAnomalies.filter((a) => a.status === "new"), isLoading: false, error: null, mutate: vi.fn() };
+      }
+      return { data: mockAnomalies, isLoading: false, error: null, mutate: vi.fn() };
+    });
   });
 
   test("status filter tab 'New' excludes reviewed, resolved, and false_positive anomalies", async () => {
-    vi.mocked(api.fetchGlobalAnomalies).mockImplementation(async (status) => {
-      if (status === "new") {
-        return mockAnomalies.filter((a) => a.status === "new");
-      }
-      return mockAnomalies;
-    });
+    // handled by useApi mock above
 
     render(<GlobalAnomalyLogPage />);
 
@@ -80,7 +90,7 @@ describe("Global Anomaly Log Page Component Test Suite", () => {
     fireEvent.click(newTab);
 
     await waitFor(() => {
-      expect(api.fetchGlobalAnomalies).toHaveBeenCalledWith("new", undefined, expect.any(Object));
+      expect(useApi).toHaveBeenCalledWith(expect.stringContaining("status=new"));
     });
 
     // Should contain 'Organic channel drop drove -65% shift' and NOT reviewed or resolved excerpts
@@ -91,7 +101,7 @@ describe("Global Anomaly Log Page Component Test Suite", () => {
   });
 
   test("sorting by severity orders rows in descending order (High to Low)", async () => {
-    vi.mocked(api.fetchGlobalAnomalies).mockResolvedValue(mockAnomalies);
+    // handled by useApi mock above
 
     render(<GlobalAnomalyLogPage />);
 
@@ -111,7 +121,7 @@ describe("Global Anomaly Log Page Component Test Suite", () => {
   });
 
   test("text search input filters rows matching query", async () => {
-    vi.mocked(api.fetchGlobalAnomalies).mockResolvedValue(mockAnomalies);
+    // handled by useApi mock above
 
     render(<GlobalAnomalyLogPage />);
 

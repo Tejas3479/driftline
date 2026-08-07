@@ -13,6 +13,13 @@ vi.mock("../app/api", () => {
   };
 });
 
+// Mock the SWR hook used by components
+vi.mock("@/hooks/useApi", () => {
+  return {
+    useApi: vi.fn()
+  };
+});
+
 // Mock next/dynamic to render components synchronously in tests
 vi.mock("next/dynamic", () => {
   return {
@@ -45,6 +52,8 @@ vi.mock("react-plotly.js", () => {
     ),
   };
 });
+
+import { useApi } from "@/hooks/useApi";
 
 describe("Metric Detail Page Rendering & Shading/Markers Checks", () => {
   beforeEach(() => {
@@ -117,6 +126,14 @@ describe("Metric Detail Page Rendering & Shading/Markers Checks", () => {
       },
     ];
     vi.mocked(api.fetchAnomalies).mockResolvedValue(mockAnomalies);
+
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/timeseries")) return { data: mockTimeseries, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/anomalies")) return { data: mockAnomalies, isLoading: false, error: null, mutate: vi.fn() };
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
 
     render(<MetricDetail params={{ id: "58" }} />);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, AlertTriangle, Activity, CheckCircle, XCircle, Info } from "lucide-react";
@@ -105,6 +105,12 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
       </main>
     );
   }
+  const sortedAccuracyPoints = useMemo(() => {
+    if (!accuracyResponse?.points) return [];
+    return [...accuracyResponse.points].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [accuracyResponse?.points]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-8 md:p-16">
@@ -267,9 +273,7 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {[...accuracyResponse.points]
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .map((pt, idx) => {
+                  {sortedAccuracyPoints.map((pt, idx) => {
                       const pctErrText = pt.abs_pct_error !== null
                         ? `${(pt.abs_pct_error * 100).toFixed(2)}%`
                         : "--";

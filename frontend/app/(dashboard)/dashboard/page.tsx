@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { 
   AlertTriangle, 
@@ -42,47 +42,62 @@ function MetricCard({ metric }: { metric: Metric }) {
 
   const points = tsData?.points || [];
   
-  let latestValue: number | null = null;
-  let recentAnomaly: Anomaly | null = null;
-  let pctChange: number | null = null;
-  let absChange: number | null = null;
+  const {
+    latestValue,
+    recentAnomaly,
+    pctChange,
+    absChange,
+    sparklinePoints,
+  } = useMemo(() => {
+    let latestVal: number | null = null;
+    let recentAnom: Anomaly | null = null;
+    let pctChg: number | null = null;
+    let absChg: number | null = null;
+    let sparklinePts: TimeseriesPoint[] = [];
 
-  if (points.length > 0) {
-    const sortedPoints = [...points].sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    latestValue = sortedPoints[sortedPoints.length - 1].value_total;
+    if (points.length > 0) {
+      const sortedPoints = [...points].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      latestVal = sortedPoints[sortedPoints.length - 1].value_total;
+      sparklinePts = sortedPoints.slice(-30);
 
-    const maxDate = new Date(sortedPoints[sortedPoints.length - 1].date);
-    const sevenDaysAgo = new Date(maxDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const maxDate = new Date(sortedPoints[sortedPoints.length - 1].date);
+      const sevenDaysAgo = new Date(maxDate.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const newRecentAnoms = anomalies
-      .filter((a) => {
-        const aDate = new Date(a.date);
-        return a.status === "new" && aDate >= sevenDaysAgo && aDate <= maxDate;
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const newRecentAnoms = anomalies
+        .filter((a) => {
+          const aDate = new Date(a.date);
+          return a.status === "new" && aDate >= sevenDaysAgo && aDate <= maxDate;
+        })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    if (newRecentAnoms.length > 0) {
-      recentAnomaly = newRecentAnoms[0];
-      const pt = sortedPoints.find((p) => p.date === recentAnomaly!.date);
-      if (pt && pt.trend !== null && pt.seasonal !== null) {
-        const expected = pt.trend + pt.seasonal;
-        const actual = pt.value_total;
+      if (newRecentAnoms.length > 0) {
+        recentAnom = newRecentAnoms[0];
+        const pt = sortedPoints.find((p) => p.date === recentAnom!.date);
+        if (pt && pt.trend !== null && pt.seasonal !== null) {
+          const expected = pt.trend + pt.seasonal;
+          const actual = pt.value_total;
 
-        if (Math.abs(expected) >= 1e-3) {
-          pctChange = ((actual - expected) / expected) * 100;
-        } else {
-          absChange = actual - expected;
+          if (Math.abs(expected) >= 1e-3) {
+            pctChg = ((actual - expected) / expected) * 100;
+          } else {
+            absChg = actual - expected;
+          }
         }
       }
     }
-  }
+
+    return {
+      latestValue: latestVal,
+      recentAnomaly: recentAnom,
+      pctChange: pctChg,
+      absChange: absChg,
+      sparklinePoints: sparklinePts,
+    };
+  }, [points, anomalies]);
 
   const hasAnomaly = recentAnomaly !== null;
-  const sparklinePoints = [...points]
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(-30);
 
   let sparklineSvgPath = "";
   let sparklineAreaPath = "";

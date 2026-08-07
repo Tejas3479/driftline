@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import ForecastPage from "../app/(dashboard)/metrics/[id]/forecast/page";
 import * as api from "../app/api";
+import { useApi } from "@/hooks/useApi";
 
 // Mock the API client functions
 vi.mock("../app/api", () => {
@@ -13,6 +14,11 @@ vi.mock("../app/api", () => {
     fetchAccuracy: vi.fn(),
   };
 });
+
+// Mock SWR hook
+vi.mock("@/hooks/useApi", () => ({
+  useApi: vi.fn()
+}));
 
 // Mock next/dynamic to render Plotly components synchronously in tests
 vi.mock("next/dynamic", () => {
@@ -43,6 +49,15 @@ vi.mock("next/dynamic", () => {
 vi.mock("react-plotly.js", () => {
   return {
     default: () => <div data-testid="mock-plotly-chart">Plotly Chart Rendered</div>,
+  };
+});
+
+// Mock CountUp to render final value synchronously
+vi.mock("@/components/CountUp", () => {
+  return {
+    default: ({ to, decimals = 0, suffix = "" }: any) => {
+      return <span>{(Number(to)).toFixed(decimals)}{suffix}</span>;
+    },
   };
 });
 
@@ -129,6 +144,15 @@ describe("Forecast Page & Model Track Record Rendering Suite", () => {
     };
     vi.mocked(api.fetchAccuracy).mockResolvedValue(mockAccuracy);
 
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/timeseries")) return { data: mockTimeseries, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/forecast")) return { data: mockForecast, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/accuracy")) return { data: mockAccuracy, isLoading: false, error: null, mutate: vi.fn() };
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
+
     render(<ForecastPage params={{ id: "1" }} />);
 
     // Wait for page to render
@@ -178,6 +202,15 @@ describe("Forecast Page & Model Track Record Rendering Suite", () => {
       points: [],
     };
     vi.mocked(api.fetchAccuracy).mockResolvedValue(mockAccuracy);
+
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/timeseries")) return { data: mockTimeseries, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/forecast")) return { data: mockForecast, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/accuracy")) return { data: mockAccuracy, isLoading: false, error: null, mutate: vi.fn() };
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
 
     render(<ForecastPage params={{ id: "1" }} />);
 

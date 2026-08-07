@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Calendar, AlertTriangle, Info, ShieldAlert, TrendingUp, LayoutGrid } from "lucide-react";
@@ -71,33 +71,46 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
 
   // Filter timeseries and anomalies based on selected range (anchored to max date)
   const allPoints = timeseriesData.points;
-  const sortedPoints = [...allPoints].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
+  
+  const { filteredPoints, filteredAnomalies, values } = useMemo(() => {
+    const sortedPoints = [...allPoints].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
 
-  let filteredPoints = sortedPoints;
-  let filteredAnomalies = anomalies;
+    let fPoints = sortedPoints;
+    let fAnomalies = anomalies;
 
-  if (sortedPoints.length > 0 && range !== "all") {
-    const maxDate = new Date(sortedPoints[sortedPoints.length - 1].date);
-    let cutoff = new Date(maxDate);
+    if (sortedPoints.length > 0 && range !== "all") {
+      const maxDate = new Date(sortedPoints[sortedPoints.length - 1].date);
+      let cutoff = new Date(maxDate);
 
-    if (range === "7d") {
-      cutoff.setDate(maxDate.getDate() - 7);
-    } else if (range === "30d") {
-      cutoff.setDate(maxDate.getDate() - 30);
-    } else if (range === "90d") {
-      cutoff.setDate(maxDate.getDate() - 90);
-    } else if (range === "1y") {
-      cutoff.setFullYear(maxDate.getFullYear() - 1);
+      if (range === "7d") {
+        cutoff.setDate(maxDate.getDate() - 7);
+      } else if (range === "30d") {
+        cutoff.setDate(maxDate.getDate() - 30);
+      } else if (range === "90d") {
+        cutoff.setDate(maxDate.getDate() - 90);
+      } else if (range === "1y") {
+        cutoff.setFullYear(maxDate.getFullYear() - 1);
+      }
+
+      fPoints = sortedPoints.filter((p) => new Date(p.date) >= cutoff);
+      fAnomalies = anomalies.filter((a) => new Date(a.date) >= cutoff);
     }
 
-    filteredPoints = sortedPoints.filter((p) => new Date(p.date) >= cutoff);
-    filteredAnomalies = anomalies.filter((a) => new Date(a.date) >= cutoff);
-  }
+    const sortedFAnomalies = [...fAnomalies].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
 
-  // Compute key stats over filtered dataset
-  const values = filteredPoints.map((p) => p.value_total);
+    const vals = fPoints.map((p) => p.value_total);
+
+    return {
+      filteredPoints: fPoints,
+      filteredAnomalies: sortedFAnomalies,
+      values: vals,
+    };
+  }, [allPoints, anomalies, range]);
+
   const maxVal = values.length > 0 ? Math.max(...values) : 0;
   const minVal = values.length > 0 ? Math.min(...values) : 0;
   const avgVal = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
@@ -261,9 +274,7 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
-                  {[...filteredAnomalies]
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .map((anom) => {
+                  {filteredAnomalies.map((anom) => {
                       let typeLabelColor = "bg-red-500/10 text-red-400 border-red-500/20";
                       if (anom.type === "level_shift") {
                         typeLabelColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";

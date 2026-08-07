@@ -16,17 +16,27 @@ vi.mock("../app/api", () => {
   };
 });
 
+// Mock SWR hook
+vi.mock("@/hooks/useApi", () => ({
+  useApi: vi.fn()
+}));
+
+import { useApi } from "@/hooks/useApi";
+
 // Mock react-plotly.js to prevent jsdom canvas rendering crashes
 vi.mock("react-plotly.js", () => {
   return {
-    default: (props: any) => (
-      <div data-testid="mock-plotly-chart" onClick={props.onClick ? () => props.onClick({ points: [{ pointIndex: 0 }] }) : undefined}>
-        Plotly Chart Rendered
-        <div data-testid="mock-plotly-data-count">
-          {props.data?.length || 0}
+    default: (props: any) => {
+      const handleClick = props.onClick ? () => props.onClick({ points: [{ pointIndex: 0 }] }) : undefined;
+      return (
+        <div data-testid="mock-plotly-chart" onClick={handleClick}>
+          Plotly Chart Rendered
+          <div data-testid="mock-plotly-data-count">
+            {props.data?.length || 0}
+          </div>
         </div>
-      </div>
-    ),
+      );
+    }
   };
 });
 
@@ -103,6 +113,15 @@ describe("Anomaly Detail Page & Driver Component Test Suite", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+
+    vi.mocked(useApi).mockImplementation((url: string | null) => {
+      if (!url) return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/anomalies/") && !url.includes("/drivers")) return { data: mockAnomaly, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.endsWith("/metrics")) return { data: [mockMetric], isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/drivers")) return { data: mockDrivers, isLoading: false, error: null, mutate: vi.fn() };
+      if (url.includes("/timeseries")) return { data: mockTimeseries, isLoading: false, error: null, mutate: vi.fn() };
+      return { data: null, isLoading: false, error: null, mutate: vi.fn() };
+    });
   });
 
   test("renders anomaly detail layout, explanation text, and structural importance callout", async () => {
@@ -130,7 +149,7 @@ describe("Anomaly Detail Page & Driver Component Test Suite", () => {
 
     // Check structural importance callout
     expect(screen.getByText(/Historically,/)).toBeInTheDocument();
-    expect(screen.getByText("channel")).toBeInTheDocument();
+    expect(screen.getAllByText("channel").length).toBeGreaterThan(0);
   });
 
   test("submits false_positive status cleanly to feedback endpoint when False Positive is clicked", async () => {
@@ -206,9 +225,9 @@ describe("Anomaly Detail Page & Driver Component Test Suite", () => {
     const barChartMock = charts[0];
     fireEvent.click(barChartMock);
 
-    // Expect fetchTimeseries to be called with metric ID and segment filter "channel:organic"
+    // Expect useApi to be called with metric ID and segment filter "channel:organic"
     await waitFor(() => {
-      expect(api.fetchTimeseries).toHaveBeenCalledWith(10, "channel:organic");
+      expect(useApi).toHaveBeenCalledWith("/api/v1/metrics/10/timeseries?segment=channel%3Aorganic");
       expect(screen.getByText("Filtered: channel:organic")).toBeInTheDocument();
     });
   });
