@@ -46,8 +46,11 @@ jobs:
       - name: Run Backend Tests
         env:
           DATABASE_URL: "postgresql+asyncpg://driftline:driftline@127.0.0.1:5433/driftline_db"
+          PGPASSWORD: driftline
         run: |
           alembic upgrade head
+          psql -h 127.0.0.1 -p 5433 -U driftline -d driftline_db -c "INSERT INTO workspaces (id, name, created_at) VALUES (1, 'Default Workspace', now()) ON CONFLICT DO NOTHING;"
+          psql -h 127.0.0.1 -p 5433 -U driftline -d driftline_db -c "INSERT INTO users (id, email, hashed_password, role, workspace_id, is_active, created_at) VALUES (1, 'test@example.com', 'dummy', 'member', 1, true, now()) ON CONFLICT DO NOTHING;"
           pytest
         
   frontend-tests:
