@@ -10,6 +10,20 @@ jobs:
   backend-checks:
     name: Backend (Lint & Test)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: driftline
+          POSTGRES_PASSWORD: driftline
+          POSTGRES_DB: driftline_db
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -30,7 +44,11 @@ jobs:
         run: ruff check .
         
       - name: Run Backend Tests
-        run: pytest
+        env:
+          DATABASE_URL: "postgresql+asyncpg://driftline:driftline@127.0.0.1:5433/driftline_db"
+        run: |
+          alembic upgrade head
+          pytest
         
   frontend-tests:
     name: Frontend (Test)
