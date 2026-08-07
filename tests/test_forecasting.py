@@ -1,21 +1,22 @@
-import json
 from datetime import date, timedelta
+
 import numpy as np
 import pandas as pd
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
-from src.db.models import Workspace
-from src.ingestion.models import Metric
 from src.anomalies.models import DailyRollup
+from src.db.models import Workspace
 from src.forecasting.models import Forecast
 from src.forecasting.service import (
     build_forecasting_features,
-    train_quantile_models,
     enforce_quantile_non_crossing,
-    reconcile_segment_forecasts,
     generate_multi_step_forecast,
+    reconcile_segment_forecasts,
+    train_quantile_models,
 )
+from src.ingestion.models import Metric
+
 
 def test_feature_derivation_no_double_shift():
     """
@@ -130,7 +131,7 @@ def test_held_out_forecast_accuracy():
     X_train = build_forecasting_features(train_df)
     y_train = train_df["value"]
     
-    model_p10, model_p50, model_p90 = train_quantile_models(X_train, y_train, model_backend="lightgbm")
+    _model_p10, model_p50, _model_p90 = train_quantile_models(X_train, y_train, model_backend="lightgbm")
     
     # Perform recursive multi-step forecasting for 30 steps
     history_vals = list(train_df["value"].values)
@@ -166,9 +167,11 @@ def test_held_out_forecast_accuracy():
     # Assert out-of-sample MAPE is within 15% (0.15)
     assert mape <= 0.15, f"Out-of-sample held-out MAPE {mape:.4f} exceeded 0.15 threshold"
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+
 from src.db.session import DATABASE_URL
+
 
 @pytest.mark.asyncio
 async def test_xgboost_and_lightgbm_backends():
@@ -275,7 +278,7 @@ async def test_jsonb_upsert_semantics():
         await db_session.flush()
         
         # Run 1
-        res1 = await generate_multi_step_forecast(
+        await generate_multi_step_forecast(
             metric.id, db_session, horizon_days=7, model_backend="lightgbm", save_to_db=True
         )
         
@@ -284,7 +287,7 @@ async def test_jsonb_upsert_semantics():
         assert count1 == 7
         
         # Run 2 (re-run forecast for same metric and dates)
-        res2 = await generate_multi_step_forecast(
+        await generate_multi_step_forecast(
             metric.id, db_session, horizon_days=7, model_backend="lightgbm", save_to_db=True
         )
         
@@ -435,6 +438,7 @@ async def test_forecast_accuracy_endpoint():
     Tests GET /metrics/{id}/forecast and GET /metrics/{id}/accuracy endpoints via httpx.AsyncClient.
     """
     import httpx
+
     from main import app
     
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:

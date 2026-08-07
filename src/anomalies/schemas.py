@@ -1,20 +1,22 @@
 from datetime import date, datetime
-from typing import Dict, List, Optional
+
 from pydantic import BaseModel, ConfigDict
-from src.anomalies.models import AnomalyTypeEnum, AnomalyStatusEnum
+
+from src.anomalies.models import AnomalyStatusEnum, AnomalyTypeEnum
+
 
 class TimeseriesPointSchema(BaseModel):
     date: date
     value_total: float
-    trend: Optional[float] = None
-    seasonal: Optional[float] = None
-    residual: Optional[float] = None
-    dimension_values: Dict[str, str]
+    trend: float | None = None
+    seasonal: float | None = None
+    residual: float | None = None
+    dimension_values: dict[str, str]
 
 class TimeseriesResponseSchema(BaseModel):
     metric_id: int
-    mad: Optional[float] = None
-    points: List[TimeseriesPointSchema]
+    mad: float | None = None
+    points: list[TimeseriesPointSchema]
 
 class AnomalyResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -27,7 +29,7 @@ class AnomalyResponseSchema(BaseModel):
     z_score: float
     isolation_score: float
     status: AnomalyStatusEnum
-    explanation_text: Optional[str]
+    explanation_text: str | None
     created_at: datetime
 
 class AnomalyDetailResponseSchema(AnomalyResponseSchema):
@@ -44,5 +46,5 @@ class GlobalAnomalyResponseSchema(BaseModel):
     severity_score: float
     anomaly_type: str
     status: str
-    explanation_excerpt: Optional[str] = None
+    explanation_excerpt: str | None = None
 

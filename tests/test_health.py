@@ -1,7 +1,10 @@
 import asyncio
-from fastapi.testclient import TestClient
+
 import httpx
+from fastapi.testclient import TestClient
+
 from main import app
+
 
 def test_health_check_sync():
     client = TestClient(app)

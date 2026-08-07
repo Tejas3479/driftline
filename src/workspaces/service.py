@@ -1,10 +1,12 @@
-from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.auth.models import User
-from src.db.models import Workspace
-from src.workspaces.schemas import WorkspaceUserCreate, UserUpdate
 from src.auth.security import get_password_hash
+from src.db.models import Workspace
+from src.workspaces.schemas import UserUpdate, WorkspaceUserCreate
+
 
 class WorkspaceError(Exception):
     pass
@@ -12,11 +14,11 @@ class WorkspaceError(Exception):
 class UnauthorizedError(WorkspaceError):
     pass
 
-async def get_workspace(db: AsyncSession, workspace_id: int) -> Optional[Workspace]:
+async def get_workspace(db: AsyncSession, workspace_id: int) -> Workspace | None:
     res = await db.execute(select(Workspace).where(Workspace.id == workspace_id))
     return res.scalar_one_or_none()
 
-async def list_workspace_users(db: AsyncSession, workspace_id: int, current_user: User) -> List[User]:
+async def list_workspace_users(db: AsyncSession, workspace_id: int, current_user: User) -> list[User]:
     if current_user.workspace_id != workspace_id:
         raise UnauthorizedError("Not authorized to view this workspace")
         

@@ -1,26 +1,27 @@
 import asyncio
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.db.session import get_db
-from src.auth.models import User
-from src.auth.dependencies import get_current_user
-from src.ingestion.service import verify_metric_access
-from src.ingestion.schemas import (
-    MetricCreateSchema,
-    MetricUpdateSchema,
-    MetricResponseSchema,
-    InspectionResponseSchema,
-    DataConfirmSchema,
-    DataConfirmResponseSchema,
-)
-import src.ingestion.service as service
-from src.limiter import limiter
+
 from src.audit import audit_log
+from src.auth.dependencies import get_current_user
+from src.auth.models import User
+from src.db.session import get_db
+from src.ingestion import service
+from src.ingestion.schemas import (
+    DataConfirmResponseSchema,
+    DataConfirmSchema,
+    InspectionResponseSchema,
+    MetricCreateSchema,
+    MetricResponseSchema,
+    MetricUpdateSchema,
+)
+from src.ingestion.service import verify_metric_access
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-@router.get("/metrics", response_model=List[MetricResponseSchema])
+@router.get("/metrics", response_model=list[MetricResponseSchema])
 @limiter.limit("60/minute")
 async def list_metrics_endpoint(
     request: Request,
@@ -70,7 +71,6 @@ async def delete_metric_endpoint(
     await service.delete_metric(db, metric)
     audit_log("metric.deleted", user_id=current_user.id, workspace_id=current_user.workspace_id,
              resource_type="metric", resource_id=id)
-    return None
 
 @router.post("/metrics/{id}/data", response_model=InspectionResponseSchema)
 @limiter.limit("20/minute")

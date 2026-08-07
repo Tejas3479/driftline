@@ -1,7 +1,10 @@
 import io
+
 import httpx
 import pytest
+
 from main import app
+
 
 @pytest.mark.asyncio
 async def test_clean_csv_upload_and_confirmation():

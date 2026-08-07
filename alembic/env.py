@@ -1,14 +1,14 @@
+import asyncio
 import os
 import sys
-import asyncio
 from logging.config import fileConfig
 
+from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,14 +18,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import Base and all domain models for autogenerate support
 from src.db.base import Base
-import src.db.models
-import src.ingestion.models
-import src.anomalies.models
-import src.drivers.models
-import src.forecasting.models
-import src.digests.models
-import src.alerts.models
-import src.auth.models
 
 target_metadata = Base.metadata
 

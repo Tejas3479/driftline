@@ -1,5 +1,6 @@
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+
+from pydantic import BaseModel, ConfigDict
+
 
 class SegmentContributionSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -23,6 +24,6 @@ class AnomalyDriversResponseSchema(BaseModel):
     anomaly_id: int
     metric_id: int
     explanation_text: str
-    primary_dimension: Optional[str] = None
-    ranked_segments: List[SegmentContributionSchema]
-    structural_importance: List[StructuralImportanceSchema]
+    primary_dimension: str | None = None
+    ranked_segments: list[SegmentContributionSchema]
+    structural_importance: list[StructuralImportanceSchema]

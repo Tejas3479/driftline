@@ -1,7 +1,7 @@
-import json
-from datetime import date, datetime
-from typing import Dict, List, Optional
+from datetime import date
+
 from pydantic import BaseModel, Field, model_validator
+
 
 class ForecastPointSchema(BaseModel):
     metric_id: int
@@ -10,7 +10,7 @@ class ForecastPointSchema(BaseModel):
     p10: float
     p50: float
     p90: float
-    dimension_values: Dict[str, str] = Field(default_factory=dict)
+    dimension_values: dict[str, str] = Field(default_factory=dict)
     model_version: str
 
     @model_validator(mode='after')
@@ -25,7 +25,7 @@ class ForecastResultSchema(BaseModel):
     as_of_date: date
     model_version: str
     low_confidence: bool = False
-    forecasts: List[ForecastPointSchema]
+    forecasts: list[ForecastPointSchema]
 
 class ForecastGenerateRequestSchema(BaseModel):
     metric_id: int
@@ -38,19 +38,19 @@ class AccuracyPointSchema(BaseModel):
     predicted_p50: float
     actual: float
     abs_error: float
-    abs_pct_error: Optional[float] = None
-    in_bounds: Optional[bool] = None
-    predicted_p10: Optional[float] = None
-    predicted_p90: Optional[float] = None
+    abs_pct_error: float | None = None
+    in_bounds: bool | None = None
+    predicted_p10: float | None = None
+    predicted_p90: float | None = None
     used_ml_model: bool = True
 
 class AccuracyResponseSchema(BaseModel):
     metric_id: int
     horizon_days: int
     model_backend: str
-    mape: Optional[float] = None
-    mae: Optional[float] = None
-    coverage_pct: Optional[float] = None
+    mape: float | None = None
+    mae: float | None = None
+    coverage_pct: float | None = None
     total_evaluations: int
     ml_evaluations: int
-    points: List[AccuracyPointSchema]
+    points: list[AccuracyPointSchema]

@@ -1,10 +1,14 @@
 import enum
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Date, Float, Text, DateTime, ForeignKey, Index, Enum as SQLEnum, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Text, func
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.db.base import Base
+
 
 class AnomalyTypeEnum(str, enum.Enum):
     spike = "spike"
@@ -25,9 +29,9 @@ class DailyRollup(Base):
     metric_id: Mapped[int] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     value_total: Mapped[float] = mapped_column(Float, nullable=False)
-    trend: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    seasonal: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    residual: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    trend: Mapped[float | None] = mapped_column(Float, nullable=True)
+    seasonal: Mapped[float | None] = mapped_column(Float, nullable=True)
+    residual: Mapped[float | None] = mapped_column(Float, nullable=True)
     dimension_values: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default='{}')
 
     # Relationships
@@ -54,7 +58,7 @@ class Anomaly(Base):
         server_default=AnomalyStatusEnum.new.value,
         nullable=False
     )
-    explanation_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    explanation_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships

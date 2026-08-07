@@ -1,13 +1,6 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from src.auth.dependencies import get_current_user
-from src.ingestion.service import verify_metric_access
-from src.auth.models import User
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.limiter import limiter
-from src.audit import audit_log
 
-from src.db.session import get_db
 from src.alerts.schemas import (
     AlertRuleCreateSchema,
     AlertRuleResponseSchema,
@@ -15,11 +8,17 @@ from src.alerts.schemas import (
 )
 from src.alerts.service import (
     create_or_update_alert_rule,
-    get_alert_rules,
     delete_alert_rule,
+    get_alert_rules,
     list_notifications,
     mark_notification_read,
 )
+from src.audit import audit_log
+from src.auth.dependencies import get_current_user
+from src.auth.models import User
+from src.db.session import get_db
+from src.ingestion.service import verify_metric_access
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)], tags=["alerts"])
 
@@ -48,7 +47,7 @@ async def create_or_update_alert_rule_endpoint(
             channels=channels_list
         )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to configure alert rule: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to configure alert rule: {e!s}")
 
 @router.delete("/metrics/{metric_id}/alert-rules", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("20/minute")
@@ -63,9 +62,8 @@ async def delete_alert_rule_endpoint(
     await delete_alert_rule(db, metric_id, current_user.workspace_id)
     audit_log("alert_rule.deleted", user_id=current_user.id, workspace_id=current_user.workspace_id,
              resource_type="alert_rule", details={"metric_id": metric_id})
-    return None
 
-@router.get("/metrics/{metric_id}/alert-rules", response_model=List[AlertRuleResponseSchema])
+@router.get("/metrics/{metric_id}/alert-rules", response_model=list[AlertRuleResponseSchema])
 @limiter.limit("60/minute")
 async def get_alert_rules_endpoint(
     request: Request,
@@ -87,7 +85,7 @@ async def get_alert_rules_endpoint(
         ))
     return out
 
-@router.get("/notifications", response_model=List[NotificationResponseSchema])
+@router.get("/notifications", response_model=list[NotificationResponseSchema])
 @limiter.limit("60/minute")
 async def get_notifications_endpoint(
     request: Request,

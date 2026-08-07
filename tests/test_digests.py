@@ -1,19 +1,13 @@
-import os
 import asyncio
-import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.date import DateTrigger
+import os
 from datetime import datetime, timedelta
 
+import pytest
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.date import DateTrigger
+from httpx import ASGITransport, AsyncClient
+
 from main import app
-from src.ingestion.models import Metric, Observation
-from src.ingestion.service import create_metric, inspect_and_validate_csv, confirm_and_persist_observations
-from src.ingestion.schemas import MetricCreateSchema, DataConfirmSchema
-from src.digests.models import Digest
-from src.digests.service import generate_weekly_digest
 from src.jobs.service import run_daily_pipeline, run_weekly_retrain_and_digest
 
 DEMO_CSV_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "demo_data", "daily_revenue.csv")

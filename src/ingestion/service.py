@@ -1,17 +1,24 @@
 import asyncio
 import io
 import json
-import structlog
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any
+
 import pandas as pd
 import polars as pl
-from sqlalchemy import select, delete, text, func
+import structlog
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Workspace
-from src.ingestion.models import Metric, DimensionDef, Observation, DirectionGoodEnum, GrainEnum
-from src.ingestion.schemas import MetricCreateSchema, DataConfirmSchema
+from src.ingestion.models import (
+    DimensionDef,
+    DirectionGoodEnum,
+    GrainEnum,
+    Metric,
+    Observation,
+)
+from src.ingestion.schemas import DataConfirmSchema, MetricCreateSchema
 
 logger = structlog.get_logger(__name__)
 
@@ -24,7 +31,7 @@ DATE_FORMATS = [
     "%Y-%m-%d %H:%M:%S",
 ]
 
-def parse_date_str(val: Any) -> Optional[date]:
+def parse_date_str(val: Any) -> date | None:
     """Helper to parse date string across multiple formats."""
     if val is None:
         return None
@@ -101,7 +108,7 @@ async def create_metric(db: AsyncSession, schema: MetricCreateSchema, current_wo
     await db.refresh(metric)
     return metric
 
-async def get_metric(db: AsyncSession, metric_id: int) -> Optional[Metric]:
+async def get_metric(db: AsyncSession, metric_id: int) -> Metric | None:
     """Retrieve metric by ID."""
     result = await db.execute(select(Metric).where(Metric.id == metric_id))
     return result.scalar_one_or_none()
@@ -119,7 +126,7 @@ async def update_metric(db: AsyncSession, metric: Metric, schema: 'MetricUpdateS
     await db.refresh(metric)
     return metric
 
-def inspect_and_validate_csv(metric: Metric, file_bytes: bytes) -> Dict[str, Any]:
+def inspect_and_validate_csv(metric: Metric, file_bytes: bytes) -> dict[str, Any]:
     """
     Step 2: Read CSV with Polars, infer columns, generate validation report, and detect date gaps.
     """
@@ -132,7 +139,7 @@ def inspect_and_validate_csv(metric: Metric, file_bytes: bytes) -> Dict[str, Any
             "validation_report": {
                 "is_valid": False,
                 "total_rows": 0,
-                "errors": [{"row_number": 0, "column": "file", "issue": f"Invalid CSV file format: {str(e)}", "invalid_value": None}],
+                "errors": [{"row_number": 0, "column": "file", "issue": f"Invalid CSV file format: {e!s}", "invalid_value": None}],
                 "date_gaps": [],
                 "inferred_mapping": {"date_col": "", "value_col": "", "dimension_cols": []}
             },
@@ -203,8 +210,8 @@ def inspect_and_validate_csv(metric: Metric, file_bytes: bytes) -> Dict[str, Any
 
     # Step 2.c: Generate validation report
     errors = []
-    seen_combos: Dict[Tuple[str, str], int] = {}
-    valid_dates: Set[date] = set()
+    seen_combos: dict[tuple[str, str], int] = {}
+    valid_dates: set[date] = set()
 
     for idx in range(total_rows):
         row_num = idx + 2  # 1-indexed file line (Line 1 is header, Line 2 is first data row)
@@ -301,7 +308,7 @@ async def confirm_and_persist_observations(
     db: AsyncSession,
     metric_id: int,
     schema: DataConfirmSchema
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Step 3 & 4: Convert Polars -> Pandas right before DB insert.
     Handle append (diff) vs replace.
@@ -366,7 +373,7 @@ async def confirm_and_persist_observations(
         existing_obs_list = existing_obs_res.scalars().all()
 
         # Key existing obs by (date, json_serialized_sorted_dims)
-        def make_key(d: date, dims: Dict[str, Any]) -> str:
+        def make_key(d: date, dims: dict[str, Any]) -> str:
             sorted_dims = sorted((k, str(v).strip()) for k, v in dims.items())
             return f"{d.isoformat()}::{json.dumps(sorted_dims)}"
 
@@ -413,7 +420,7 @@ async def confirm_and_persist_observations(
         "total_observations": total_obs
     }
 
-async def list_metrics(db: AsyncSession, workspace_id: int) -> List[Metric]:
+async def list_metrics(db: AsyncSession, workspace_id: int) -> list[Metric]:
     """
     Retrieve all metric configurations for a given workspace.
     """

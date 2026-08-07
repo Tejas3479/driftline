@@ -1,23 +1,19 @@
 import os
-import structlog
-import uuid
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import timedelta
 
 import matplotlib
+import structlog
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.session import AsyncSessionLocal
-from src.ingestion.models import Metric
-from src.anomalies.models import DailyRollup, Anomaly
-from src.forecasting.models import Forecast
+from src.anomalies.models import Anomaly, DailyRollup
 from src.digests.models import Digest
+from src.forecasting.models import Forecast
+from src.ingestion.models import Metric
 
 logger = structlog.get_logger(__name__)
 
@@ -240,7 +236,7 @@ async def generate_weekly_digest(
 
 
 
-async def get_digest_by_id(db: AsyncSession, digest_id: int, workspace_id: int) -> Optional[Digest]:
+async def get_digest_by_id(db: AsyncSession, digest_id: int, workspace_id: int) -> Digest | None:
     """Retrieves digest by primary key ID and verifies workspace."""
     stmt = select(Digest).where(Digest.id == digest_id, Digest.workspace_id == workspace_id)
     res = await db.execute(stmt)
@@ -248,9 +244,9 @@ async def get_digest_by_id(db: AsyncSession, digest_id: int, workspace_id: int) 
 
 async def list_digests(
     db: AsyncSession,
-    workspace_id: Optional[int] = None,
-    metric_id: Optional[int] = None
-) -> List[Digest]:
+    workspace_id: int | None = None,
+    metric_id: int | None = None
+) -> list[Digest]:
     """Lists digests optionally filtered by workspace_id or metric_id."""
     stmt = select(Digest).order_by(Digest.generated_at.desc())
     if workspace_id is not None:

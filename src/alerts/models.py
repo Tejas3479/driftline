@@ -1,9 +1,12 @@
 from datetime import datetime
-from typing import Any, Dict
-from sqlalchemy import String, Float, Text, Boolean, DateTime, ForeignKey, Index, func
+from typing import Any
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.db.base import Base
+
 
 class AlertRule(Base):
     __tablename__ = "alert_rules"
@@ -11,7 +14,7 @@ class AlertRule(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     metric_id: Mapped[int] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False, unique=True)
     min_severity: Mapped[float] = mapped_column(Float, nullable=False)
-    channels: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    channels: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     # Relationships
     metric: Mapped["Metric"] = relationship("Metric", back_populates="alert_rule", lazy="raise")

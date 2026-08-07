@@ -1,27 +1,22 @@
-import structlog
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Any, List
+from typing import Any
 
-from src.db.session import get_db
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.audit import audit_log
 from src.auth.dependencies import get_current_user
 from src.auth.models import User
-from src.db.models import Workspace
 from src.auth.schemas import UserRead
-from src.workspaces.schemas import WorkspaceUserCreate, UserUpdate
-from src.auth.security import get_password_hash
+from src.db.session import get_db
 from src.limiter import limiter
-from src.audit import audit_log
-
-from src.workspaces.service import (
-    get_workspace as svc_get_workspace,
-    list_workspace_users as svc_list_users,
-    add_workspace_user as svc_add_user,
-    update_user_role as svc_update_role,
-    remove_user as svc_remove_user,
-    UnauthorizedError
-)
+from src.workspaces.schemas import UserUpdate, WorkspaceUserCreate
+from src.workspaces.service import UnauthorizedError
+from src.workspaces.service import add_workspace_user as svc_add_user
+from src.workspaces.service import get_workspace as svc_get_workspace
+from src.workspaces.service import list_workspace_users as svc_list_users
+from src.workspaces.service import remove_user as svc_remove_user
+from src.workspaces.service import update_user_role as svc_update_role
 
 logger = structlog.get_logger(__name__)
 
@@ -39,7 +34,7 @@ async def get_my_workspace(
         raise HTTPException(status_code=404, detail="Workspace not found")
     return workspace
 
-@router.get("/{workspace_id}/users", response_model=List[UserRead])
+@router.get("/{workspace_id}/users", response_model=list[UserRead])
 @limiter.limit("30/minute")
 async def list_workspace_users(
     request: Request,

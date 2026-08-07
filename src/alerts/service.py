@@ -1,16 +1,14 @@
-import logging
-from typing import Any, Dict, List, Optional
+import structlog
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-import structlog
 
-from src.ingestion.models import Metric
-from src.anomalies.models import Anomaly, AnomalyStatusEnum
-from src.alerts.models import AlertRule, Notification
-from src.auth.models import User
-from src.alerts.schemas import AlertRuleCreateSchema, ChannelEnum
 from src.alerts.email import send_immediate_alert_email
+from src.alerts.models import AlertRule, Notification
+from src.alerts.schemas import AlertRuleCreateSchema, ChannelEnum
+from src.anomalies.models import Anomaly, AnomalyStatusEnum
+from src.auth.models import User
+from src.ingestion.models import Metric
 
 logger = structlog.get_logger(__name__)
 
@@ -39,7 +37,7 @@ async def create_or_update_alert_rule(db: AsyncSession, schema: AlertRuleCreateS
     await db.refresh(rule)
     return rule
 
-async def get_alert_rules(db: AsyncSession, workspace_id: int, metric_id: Optional[int] = None) -> List[AlertRule]:
+async def get_alert_rules(db: AsyncSession, workspace_id: int, metric_id: int | None = None) -> list[AlertRule]:
     """Retrieves alert rules, optionally filtered by metric_id and enforced by workspace_id."""
     stmt = select(AlertRule).join(Metric, AlertRule.metric_id == Metric.id).where(Metric.workspace_id == workspace_id)
     if metric_id is not None:
@@ -47,7 +45,7 @@ async def get_alert_rules(db: AsyncSession, workspace_id: int, metric_id: Option
     res = await db.execute(stmt)
     return list(res.scalars().all())
 
-async def evaluate_and_trigger_alerts_for_metric(db: AsyncSession, metric_id: int) -> List[Notification]:
+async def evaluate_and_trigger_alerts_for_metric(db: AsyncSession, metric_id: int) -> list[Notification]:
     """
     Evaluates anomalies for a metric against its configured min_severity threshold using a left-anti-join:
     Queries un-notified anomalies where severity_score >= min_severity and status is not false_positive/resolved.
@@ -121,7 +119,7 @@ async def evaluate_and_trigger_alerts_for_metric(db: AsyncSession, metric_id: in
         await db.commit()
         created_notifications = list(res.scalars().all())
     except Exception as e:
-        logger.error(f"Failed to batch insert notifications for metric #{metric_id}: {str(e)}", exc_info=True)
+        logger.error(f"Failed to batch insert notifications for metric #{metric_id}: {e!s}", exc_info=True)
         await db.rollback()
         return []
 
@@ -139,15 +137,15 @@ async def evaluate_and_trigger_alerts_for_metric(db: AsyncSession, metric_id: in
                     recipient_email=recipient_email
                 )
             except Exception as email_err:
-                logger.warning(f"Email dispatch failed for alert on anomaly {anomaly.id}: {str(email_err)}")
+                logger.warning(f"Email dispatch failed for alert on anomaly {anomaly.id}: {email_err!s}")
 
     return created_notifications
 
 async def list_notifications(
     db: AsyncSession,
-    workspace_id: Optional[int] = None,
+    workspace_id: int | None = None,
     limit: int = 50
-) -> List[Notification]:
+) -> list[Notification]:
     """Lists in-app notifications for a workspace, ordered by created_at descending."""
     stmt = select(Notification).order_by(Notification.created_at.desc(), Notification.id.desc()).limit(limit)
     if workspace_id is not None:
@@ -155,7 +153,7 @@ async def list_notifications(
     res = await db.execute(stmt)
     return list(res.scalars().all())
 
-async def mark_notification_read(db: AsyncSession, notification_id: int, workspace_id: int) -> Optional[Notification]:
+async def mark_notification_read(db: AsyncSession, notification_id: int, workspace_id: int) -> Notification | None:
     """Marks an in-app notification as read if it belongs to the workspace."""
     res = await db.execute(select(Notification).where(Notification.id == notification_id, Notification.workspace_id == workspace_id))
     notification = res.scalar_one_or_none()

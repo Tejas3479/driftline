@@ -1,18 +1,16 @@
-import io
-import pytest
+from datetime import date, datetime, timedelta
+
+import httpx
 import numpy as np
 import pandas as pd
-from datetime import date, datetime, timedelta
-from sqlalchemy import select, update, delete
-from sqlalchemy.pool import NullPool
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-import httpx
+import pytest
+from sqlalchemy import delete, select, update
 
 from main import app
-from src.db.session import DATABASE_URL
-from src.ingestion.models import Metric
-from src.anomalies.models import DailyRollup, Anomaly, AnomalyStatusEnum, AnomalyTypeEnum
+from src.anomalies.models import Anomaly, DailyRollup
 from src.anomalies.service import decompose_timeseries, detect_and_persist_anomalies
+from src.ingestion.models import Metric
+
 
 @pytest.mark.asyncio
 async def test_decomposition_core_invariant():
@@ -576,14 +574,14 @@ async def test_feedback_loop_weight_decay():
         assert len(anoms) == 2
         
         # Target the day 45 anomaly (2026-02-15) where norm_z and isolation_score differ
-        target_anom = [a for a in anoms if a["date"] == "2026-02-15"][0]
+        target_anom = next(a for a in anoms if a["date"] == "2026-02-15")
         target_id = target_anom["id"]
         initial_severity = target_anom["severity_score"]
 
         # Fetch metric to assert initial z_score_weight is 0.5
-        metric_detail_res = await client.get(f"/api/v1/metrics")
+        metric_detail_res = await client.get("/api/v1/metrics")
         metrics_list = metric_detail_res.json()
-        metric_data = [m for m in metrics_list if m["id"] == metric_id][0]
+        metric_data = next(m for m in metrics_list if m["id"] == metric_id)
         assert metric_data["z_score_weight"] == 0.5
 
         # Send 5 consecutive false_positive feedbacks
@@ -594,13 +592,13 @@ async def test_feedback_loop_weight_decay():
 
         # Assert z_score_weight increased (0.5 -> > 0.6)
         # Note: can oscillate if weighted z crosses weighted iso before 5th feedback
-        metric_detail_res2 = await client.get(f"/api/v1/metrics")
-        metric_data2 = [m for m in metric_detail_res2.json() if m["id"] == metric_id][0]
+        metric_detail_res2 = await client.get("/api/v1/metrics")
+        metric_data2 = next(m for m in metric_detail_res2.json() if m["id"] == metric_id)
         assert metric_data2["z_score_weight"] > 0.6
 
         # Assert severity score in DB has decreased for this anomaly
         anom_res2 = await client.get(f"/api/v1/metrics/{metric_id}/anomalies")
-        target_anom2 = [a for a in anom_res2.json() if a["date"] == "2026-02-15"][0]
+        target_anom2 = next(a for a in anom_res2.json() if a["date"] == "2026-02-15")
         assert target_anom2["severity_score"] < initial_severity
         
         # Verify ceiling clamping: post feedback 5 more times
@@ -608,8 +606,8 @@ async def test_feedback_loop_weight_decay():
         for _ in range(5):
             await client.post(f"/api/v1/anomalies/{target_id}/feedback", json={"status": "false_positive"})
             
-        metric_detail_res3 = await client.get(f"/api/v1/metrics")
-        metric_data3 = [m for m in metric_detail_res3.json() if m["id"] == metric_id][0]
+        metric_detail_res3 = await client.get("/api/v1/metrics")
+        metric_data3 = next(m for m in metric_detail_res3.json() if m["id"] == metric_id)
         # With the correct weighted feedback loop, it will reach an equilibrium where weighted_z ~= weighted_iso
         # rather than blindly clamping at 0.9
         assert 0.6 < metric_data3["z_score_weight"] < 0.9

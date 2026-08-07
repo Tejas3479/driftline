@@ -1,15 +1,18 @@
 from datetime import date, datetime
 from typing import Optional
-from sqlalchemy import String, Date, DateTime, ForeignKey, UniqueConstraint, func
+
+from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.db.base import Base
+
 
 class Digest(Base):
     __tablename__ = "digests"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
-    metric_id: Mapped[Optional[int]] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=True)
+    metric_id: Mapped[int | None] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=True)
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     pdf_path: Mapped[str] = mapped_column(String(512), nullable=False)

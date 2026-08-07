@@ -19,25 +19,44 @@ import json
 import os
 import sys
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from src.anomalies.models import Anomaly, DailyRollup
+from src.anomalies.service import (
+    detect_and_persist_anomalies,
+    run_daily_rollup_and_decomposition,
+)
 from src.db.session import AsyncSessionLocal
-from src.ingestion.models import Metric, Observation, DimensionDef, DirectionGoodEnum, GrainEnum
-from src.ingestion.service import inspect_and_validate_csv, confirm_and_persist_observations
-from src.anomalies.models import DailyRollup, Anomaly
-from src.anomalies.service import run_daily_rollup_and_decomposition, detect_and_persist_anomalies
-from src.drivers.service import calculate_anomaly_drivers, train_and_persist_structural_importance
+from src.drivers.service import (
+    calculate_anomaly_drivers,
+    train_and_persist_structural_importance,
+)
 from src.forecasting.models import Forecast, ForecastAccuracyLog
-from src.forecasting.service import generate_multi_step_forecast, run_walk_forward_backtest, get_forecast_accuracy
+from src.forecasting.service import (
+    generate_multi_step_forecast,
+    get_forecast_accuracy,
+    run_walk_forward_backtest,
+)
+from src.ingestion.models import (
+    DimensionDef,
+    DirectionGoodEnum,
+    GrainEnum,
+    Metric,
+    Observation,
+)
+from src.ingestion.service import (
+    confirm_and_persist_observations,
+    inspect_and_validate_csv,
+)
 
 BENCHMARK_METRIC_NAME = "Synthetic MRR Benchmark"
 
@@ -72,7 +91,7 @@ async def reset_benchmark_metric(db: AsyncSession) -> Metric:
     await db.refresh(metric)
     return metric
 
-async def run_pipeline_evaluation(session: Optional[AsyncSession] = None) -> Dict[str, Any]:
+async def run_pipeline_evaluation(session: AsyncSession | None = None) -> dict[str, Any]:
     """
     Runs the complete evaluation benchmark pipeline and returns structured metric results.
     Accepts an optional caller-provided AsyncSession for pytest NullPool event-loop safety.
@@ -245,8 +264,8 @@ async def run_pipeline_evaluation(session: Optional[AsyncSession] = None) -> Dic
     pre_rollups = [r for r in all_rollups if pre_shift_start <= r.date <= pre_shift_end]
     post_rollups = [r for r in all_rollups if post_shift_start <= r.date <= post_shift_end]
 
-    def compute_mean_by_dim(rollups_list: List[DailyRollup]) -> Dict[str, float]:
-        dim_groups: Dict[str, List[float]] = {}
+    def compute_mean_by_dim(rollups_list: list[DailyRollup]) -> dict[str, float]:
+        dim_groups: dict[str, list[float]] = {}
         for r in rollups_list:
             key = json.dumps(r.dimension_values, sort_keys=True)
             dim_groups.setdefault(key, []).append(float(r.value_total))
@@ -340,7 +359,7 @@ async def run_pipeline_evaluation(session: Optional[AsyncSession] = None) -> Dic
     print_results_table(results)
     return results
 
-def print_results_table(results: Dict[str, Any]) -> None:
+def print_results_table(results: dict[str, Any]) -> None:
     """Formats and prints the canonical evaluation benchmark results table."""
     print("\n" + "=" * 80)
     print(" DRIFTLINE WHOLE-PIPELINE ACCURACY BENCHMARK RESULTS")
@@ -370,7 +389,7 @@ def print_results_table(results: Dict[str, Any]) -> None:
 
     unf = results['uniform_shift_proportionality']
     unf_status = "PASS" if unf else "FAIL"
-    print(f" uniform_shift_prop        :  {str(unf):>5}     (15.0% ±3.0% all segs)  [{unf_status}] (mean: {results['mean_level_shift_pct']:.1f}%)")
+    print(f" uniform_shift_prop        :  {unf!s:>5}     (15.0% ±3.0% all segs)  [{unf_status}] (mean: {results['mean_level_shift_pct']:.1f}%)")
 
     mape = results['forecast_MAPE']
     mape_str = f"{mape*100.0:6.2f}%" if mape is not None else "   N/A "

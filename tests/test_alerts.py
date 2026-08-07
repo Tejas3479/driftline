@@ -1,22 +1,20 @@
-import os
-import pytest
-from unittest.mock import patch, MagicMock
-from httpx import AsyncClient, ASGITransport
 from datetime import date
-from sqlalchemy import select, delete
+from unittest.mock import patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from main import app
-from src.ingestion.models import Metric, DirectionGoodEnum, SensitivityEnum, GrainEnum
-from src.anomalies.models import Anomaly, AnomalyTypeEnum, AnomalyStatusEnum
-from src.alerts.models import AlertRule, Notification
+from src.alerts.models import Notification
 from src.alerts.schemas import AlertRuleCreateSchema, ChannelEnum
 from src.alerts.service import (
     create_or_update_alert_rule,
-    get_alert_rules,
     evaluate_and_trigger_alerts_for_metric,
-    list_notifications,
-    mark_notification_read,
 )
+from src.anomalies.models import Anomaly, AnomalyStatusEnum, AnomalyTypeEnum
+from src.ingestion.models import DirectionGoodEnum, GrainEnum, Metric, SensitivityEnum
+
 
 @pytest.mark.asyncio
 async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency):
@@ -47,8 +45,8 @@ async def test_high_severity_alert_trigger_and_email_mock(override_db_dependency
         assert rule_resp.json()["min_severity"] == 50.0
 
         # 3. Inject high severity anomaly (severity 75.0 > 50.0)
-        from src.db.session import get_db
         from src.auth.models import User
+        from src.db.session import get_db
         async for session in app.dependency_overrides[get_db]():
             # Seed mock user so recipient_email lookup passes
             user = User(workspace_id=1, email="test@example.com", hashed_password="xyz")

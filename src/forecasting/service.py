@@ -1,27 +1,26 @@
-import json
-import structlog
 import asyncio
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Union
+import json
+from datetime import date, timedelta
+from typing import Any
 
 import numpy as np
 import pandas as pd
+import structlog
 from lightgbm import LGBMRegressor
-from xgboost import XGBRegressor
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.db.session import AsyncSessionLocal
-from src.ingestion.models import Metric, Observation
+from xgboost import XGBRegressor
+
 from src.anomalies.models import DailyRollup
 from src.anomalies.service import decompose_timeseries
 from src.forecasting.models import Forecast, ForecastAccuracyLog
 from src.forecasting.schemas import (
+    AccuracyPointSchema,
     ForecastPointSchema,
     ForecastResultSchema,
-    AccuracyPointSchema,
-    AccuracyResponseSchema,
 )
+from src.ingestion.models import Metric
 
 logger = structlog.get_logger(__name__)
 
@@ -84,7 +83,7 @@ def build_forecasting_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def train_quantile_models(
     X: pd.DataFrame, y: pd.Series, model_backend: str = "lightgbm"
-) -> Tuple[Any, Any, Any]:
+) -> tuple[Any, Any, Any]:
     """
     Trains p10, p50, and p90 quantile regression models on feature matrix X and target y.
     Raises ValueError if trainable history is < 60 days.
@@ -129,8 +128,8 @@ def train_quantile_models(
     return model_p10, model_p50, model_p90
 
 def enforce_quantile_non_crossing(
-    p10: Union[float, np.ndarray], p50: Union[float, np.ndarray], p90: Union[float, np.ndarray]
-) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
+    p10: float | np.ndarray, p50: float | np.ndarray, p90: float | np.ndarray
+) -> tuple[float | np.ndarray, float | np.ndarray, float | np.ndarray]:
     """
     Enforces p10 <= p50 <= p90 quantile non-crossing invariant via quantile rearrangement (sorting).
     """
@@ -152,9 +151,9 @@ def enforce_quantile_non_crossing(
     return res_p10, res_p50, res_p90
 
 def reconcile_segment_forecasts(
-    total_forecasts: Dict[date, Dict[str, float]],
-    segment_forecasts_map: Dict[str, Dict[date, Dict[str, float]]]
-) -> Dict[str, Dict[date, Dict[str, float]]]:
+    total_forecasts: dict[date, dict[str, float]],
+    segment_forecasts_map: dict[str, dict[date, dict[str, float]]]
+) -> dict[str, dict[date, dict[str, float]]]:
     """
     Reconciles per-segment forecasts with total forecasts using p50 scaling with uncertainty band-width preservation:
       - p50 is scaled by r_50 = total_p50 / sum(raw_p50_s)
@@ -164,11 +163,11 @@ def reconcile_segment_forecasts(
     if not segment_forecasts_map:
         return {}
         
-    reconciled_map: Dict[str, Dict[date, Dict[str, float]]] = {
+    reconciled_map: dict[str, dict[date, dict[str, float]]] = {
         seg_key: {} for seg_key in segment_forecasts_map
     }
     
-    dim_groups: Dict[str, List[str]] = {}
+    dim_groups: dict[str, list[str]] = {}
     for seg_key in segment_forecasts_map:
         dim = seg_key.split(":")[0] if ":" in seg_key else "default"
         dim_groups.setdefault(dim, []).append(seg_key)
@@ -212,9 +211,8 @@ def reconcile_segment_forecasts(
                 
     return reconciled_map
 
-from src.forecasting.schemas import ForecastResultSchema, ForecastPointSchema
 
-def format_forecast_result(metric_id: int, horizon: int, res: Dict[str, Any]) -> ForecastResultSchema:
+def format_forecast_result(metric_id: int, horizon: int, res: dict[str, Any]) -> ForecastResultSchema:
     forecast_points = []
     for target_date, fc_dict in res["total_forecasts"].items():
         h_day = (target_date - res["as_of_date"]).days
@@ -246,8 +244,8 @@ async def generate_multi_step_forecast(
     horizon_days: int = 30,
     model_backend: str = "lightgbm",
     save_to_db: bool = True,
-    cutoff_date: Optional[date] = None,
-) -> Dict[str, Any]:
+    cutoff_date: date | None = None,
+) -> dict[str, Any]:
     """
     Generates 7, 14, and 30-day quantile forecasts for total metric and per-segment metrics.
     If history < 60 days, falls back to seasonal-naive with trend adjustment and sets low_confidence = True.
@@ -297,7 +295,7 @@ async def generate_multi_step_forecast(
     as_of_date = df_total.index.max().date()
     history_len = len(df_total)
     
-    total_forecasts: Dict[date, Dict[str, float]] = {}
+    total_forecasts: dict[date, dict[str, float]] = {}
     low_confidence = False
     
     # Check history length gate for Cold-Start Fallback vs ML Path
@@ -365,8 +363,8 @@ async def generate_multi_step_forecast(
             trend_slope = 0.0
         last_trend = float(df_total["trend"].dropna().iloc[-1]) if not df_total["trend"].dropna().empty else float(y_total.iloc[-1])
         
-        history_values = list(df_total["value"].values)
-        history_dates = list(df_total.index)
+        list(df_total["value"].values)
+        list(df_total.index)
         
         def _run_total_predictions():
             local_total = {}
@@ -426,13 +424,13 @@ async def generate_multi_step_forecast(
         total_forecasts = await asyncio.to_thread(_run_total_predictions)
 
         # Process per-segment forecasts
-        segment_rollups_map: Dict[str, List[DailyRollup]] = {}
+        segment_rollups_map: dict[str, list[DailyRollup]] = {}
         for r in all_rollups:
             if r.dimension_values and r.dimension_values != {}:
                 sorted_dim = json.dumps(r.dimension_values, sort_keys=True)
                 segment_rollups_map.setdefault(sorted_dim, []).append(r)
                 
-        raw_segment_forecasts_map: Dict[str, Dict[date, Dict[str, float]]] = {}
+        raw_segment_forecasts_map: dict[str, dict[date, dict[str, float]]] = {}
         
         for seg_key, s_rollups in segment_rollups_map.items():
             if len(s_rollups) < 60:
@@ -596,7 +594,7 @@ async def run_walk_forward_backtest(
     horizon_days: int = 7,
     model_backend: str = "lightgbm",
     max_weeks: int = 12,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Executes expanding-window walk-forward backtest across up to 12 weekly history folds.
     Calls the EXACT same generate_multi_step_forecast pipeline with save_to_db=False.
@@ -725,7 +723,7 @@ async def get_forecast_accuracy(
     horizon_days: int = 7,
     model_backend: str = "lightgbm",
     auto_run: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Computes aggregate accuracy metrics (MAPE, MAE, coverage_pct) over the recent 12-week window.
     Runs walk-forward backtest once if no logs exist yet.

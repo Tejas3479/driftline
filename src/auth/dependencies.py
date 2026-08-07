@@ -1,15 +1,14 @@
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import jwt
+from fastapi import Depends, HTTPException, Request, status
 from jwt.exceptions import InvalidTokenError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.session import get_db
-from src.auth.security import SECRET_KEY, ALGORITHM, COOKIE_NAME
 from src.auth.models import User
 from src.auth.schemas import TokenData
-from src.ingestion.models import Metric
+from src.auth.security import ALGORITHM, COOKIE_NAME, SECRET_KEY
+from src.db.session import get_db
+
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     credentials_exception = HTTPException(

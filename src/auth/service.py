@@ -1,9 +1,11 @@
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from src.auth.models import User
-from src.db.models import Workspace
 from src.auth.schemas import UserCreate
 from src.auth.security import get_password_hash, verify_password
+from src.db.models import Workspace
+
 
 async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
     """Registers a user and creates a new workspace atomically."""

@@ -1,26 +1,23 @@
-import logging
-from pydantic import BaseModel
-import structlog
 import asyncio
 from datetime import date, timedelta
-from typing import List, Dict, Any, Tuple, Optional
-import numpy as np
-import pandas as pd
+from typing import Any
+
 import altair as alt
+import pandas as pd
+import structlog
 from catboost import CatBoostRegressor, Pool
 from fastapi import HTTPException, status
-from sqlalchemy import select, func, delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ingestion.models import Metric, Observation, DimensionDef, DirectionGoodEnum
 from src.anomalies.models import Anomaly, DailyRollup
 from src.drivers.models import AnomalyDriver
-from src.drivers.schemas import SegmentContributionSchema, StructuralImportanceSchema, AnomalyDriversResponseSchema
+from src.ingestion.models import DimensionDef, DirectionGoodEnum, Metric, Observation
 
 logger = structlog.get_logger(__name__)
 
 
-async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace_id: int) -> Dict[str, Any]:
+async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace_id: int) -> dict[str, Any]:
     # 1. Fetch anomaly
     anom_stmt = select(Anomaly).where(Anomaly.id == anomaly_id)
     anom_res = await db.execute(anom_stmt)
@@ -63,8 +60,8 @@ async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace
     segment_rollups = seg_res.scalars().all()
 
     # Process segment contributions
-    dimension_segments: Dict[str, List[Dict[str, Any]]] = {}
-    valid_segments_all: List[Dict[str, Any]] = []
+    dimension_segments: dict[str, list[dict[str, Any]]] = {}
+    valid_segments_all: list[dict[str, Any]] = []
 
     for r in segment_rollups:
         if not r.dimension_values:
@@ -75,7 +72,7 @@ async def calculate_anomaly_drivers(db: AsyncSession, anomaly_id: int, workspace
             logger.debug(f"Segment {r.dimension_values} excluded on date {r.date} due to incomplete decomposition history.")
             continue
 
-        dim_name = list(r.dimension_values.keys())[0]
+        dim_name = next(iter(r.dimension_values.keys()))
         dim_val = str(r.dimension_values[dim_name])
 
         seg_actual = float(r.value_total)
@@ -187,9 +184,9 @@ def compose_explanation_text(
     baseline_expected_total: float,
     total_delta: float,
     direction_good: DirectionGoodEnum,
-    selected_dimension: Optional[str],
-    top_segment_info: Optional[Dict[str, Any]],
-    dimension_segments: List[Dict[str, Any]]
+    selected_dimension: str | None,
+    top_segment_info: dict[str, Any] | None,
+    dimension_segments: list[dict[str, Any]]
 ) -> str:
     # 1. Neutral topline case
     if abs(total_delta) < 1e-4:
@@ -238,7 +235,7 @@ def compose_explanation_text(
     return f"{sentence_1} {sentence_2}"
 
 
-async def train_and_persist_structural_importance(db: AsyncSession, metric_id: int) -> List[Dict[str, Any]]:
+async def train_and_persist_structural_importance(db: AsyncSession, metric_id: int) -> list[dict[str, Any]]:
     """
     Trains CatBoostRegressor on raw observations to compute global structural feature importance.
     Stores array of {feature: str, importance: float} on Metric.structural_importance.
@@ -279,7 +276,7 @@ async def train_and_persist_structural_importance(db: AsyncSession, metric_id: i
                 row[k] = str(v) if v is not None else "__unassigned__"
         records.append(row)
 
-    dim_col_list = sorted(list(dimension_cols))
+    dim_col_list = sorted(dimension_cols)
     
     def _train_catboost():
         df = pd.DataFrame(records)
@@ -329,18 +326,18 @@ async def train_and_persist_structural_importance(db: AsyncSession, metric_id: i
         return structural_results
 
     except Exception as e:
-        logger.error(f"CatBoost training failed for metric {metric_id}: {str(e)}", exc_info=True)
+        logger.error(f"CatBoost training failed for metric {metric_id}: {e!s}", exc_info=True)
         # Preserve existing metric.structural_importance on savepoint rollback
         return metric.structural_importance or []
 
 async def generate_segment_comparison_spec(
     db: AsyncSession,
     metric_id: int,
-    dimension: Optional[str] = None,
-    range_token: Optional[str] = "all",
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-) -> Dict[str, Any]:
+    dimension: str | None = None,
+    range_token: str | None = "all",
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> dict[str, Any]:
     """
     Generates a Vega-Lite JSON specification dictionary comparing all segments of a dimension
     side by side on a shared y-scale using Altair faceting.
@@ -373,7 +370,7 @@ async def generate_segment_comparison_spec(
     max_date_stmt = select(func.max(DailyRollup.date)).where(DailyRollup.metric_id == metric_id)
     max_date = await db.scalar(max_date_stmt)
 
-    cutoff_date: Optional[date] = start_date
+    cutoff_date: date | None = start_date
     if cutoff_date is None and range_token and range_token != "all" and max_date is not None:
         if range_token == "7d":
             cutoff_date = max_date - timedelta(days=7)

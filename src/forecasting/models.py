@@ -1,9 +1,22 @@
 from datetime import date, datetime
-from typing import Optional
-from sqlalchemy import String, Date, Float, Integer, Boolean, DateTime, ForeignKey, Index, UniqueConstraint, func
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.db.base import Base
+
 
 class Forecast(Base):
     __tablename__ = "forecasts"
@@ -36,13 +49,13 @@ class ForecastAccuracyLog(Base):
     date: Mapped[date] = mapped_column(Date, nullable=False)
     horizon_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="7", default=7)
     model_backend: Mapped[str] = mapped_column(String(50), nullable=False, server_default="lightgbm", default="lightgbm")
-    predicted_p10: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    predicted_p10: Mapped[float | None] = mapped_column(Float, nullable=True)
     predicted_p50: Mapped[float] = mapped_column(Float, nullable=False)
-    predicted_p90: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    predicted_p90: Mapped[float | None] = mapped_column(Float, nullable=True)
     actual: Mapped[float] = mapped_column(Float, nullable=False)
     abs_error: Mapped[float] = mapped_column(Float, nullable=False, server_default="0.0", default=0.0)
-    abs_pct_error: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    in_bounds: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    abs_pct_error: Mapped[float | None] = mapped_column(Float, nullable=True)
+    in_bounds: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     used_ml_model: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true", default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

@@ -1,13 +1,16 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import get_current_user
-from src.ingestion.service import verify_metric_access
 from src.auth.models import User
 from src.db.session import get_db
-from src.forecasting.schemas import ForecastPointSchema, ForecastResultSchema, AccuracyResponseSchema
-from src.forecasting.service import generate_multi_step_forecast, get_forecast_accuracy, format_forecast_result
+from src.forecasting.schemas import AccuracyResponseSchema, ForecastResultSchema
+from src.forecasting.service import (
+    format_forecast_result,
+    generate_multi_step_forecast,
+    get_forecast_accuracy,
+)
+from src.ingestion.service import verify_metric_access
 from src.limiter import limiter
 
 router = APIRouter(tags=["forecasting"], dependencies=[Depends(get_current_user)])
@@ -39,7 +42,7 @@ async def get_metric_forecast_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate forecast: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate forecast: {e!s}")
 
 @router.get("/metrics/{id}/accuracy", response_model=AccuracyResponseSchema)
 @limiter.limit("15/minute")
@@ -67,4 +70,4 @@ async def get_metric_accuracy_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve forecast accuracy: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to retrieve forecast accuracy: {e!s}")

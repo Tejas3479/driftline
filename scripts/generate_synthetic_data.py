@@ -18,8 +18,9 @@ Outputs:
 import argparse
 import json
 import os
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from datetime import date, timedelta
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -34,7 +35,7 @@ CHANNEL_SHARES = {"Organic": 0.50, "Paid": 0.35, "Referral": 0.15}
 # Lower values on weekends (Sat/Sun)
 DOW_MULTIPLIERS = [1.08, 1.08, 1.06, 1.06, 1.04, 0.84, 0.84]
 
-def generate_synthetic_dataset(seed: int = 42, inject_anomalies: bool = True) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+def generate_synthetic_dataset(seed: int = 42, inject_anomalies: bool = True) -> tuple[pd.DataFrame, dict[str, Any]]:
     """
     Generates synthetic daily MRR dataset and ground-truth specification dictionary.
     """
@@ -187,7 +188,7 @@ def generate_synthetic_dataset(seed: int = 42, inject_anomalies: bool = True) ->
         "num_segments": 9,
         "date_start": "2024-01-01",
         "date_end": "2025-12-31",
-        "total_rows": int(len(export_df)),
+        "total_rows": len(export_df),
         "injected_anomalies": ground_truth_events
     }
 
@@ -216,7 +217,7 @@ def main():
         rng = np.random.default_rng(args.seed)
         drop_indices = rng.choice(df.index, size=15, replace=False)
         df = df.drop(drop_indices).reset_index(drop=True)
-        print(f"[!] Injected 15 date gaps into dataset.")
+        print("[!] Injected 15 date gaps into dataset.")
 
     if args.dirty:
         rng = np.random.default_rng(args.seed)
@@ -226,7 +227,7 @@ def main():
                 df.at[idx, "date"] = "INVALID_DATE_STR"
             else:
                 df.at[idx, "mrr"] = "CORRUPTED"
-        print(f"[!] Injected 10 dirty rows (invalid dates & corrupted numbers).")
+        print("[!] Injected 10 dirty rows (invalid dates & corrupted numbers).")
 
     # Save canonical CSV
     df.to_csv(csv_path, index=False)

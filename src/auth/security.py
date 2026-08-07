@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-import jwt
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
@@ -29,7 +30,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     return ph.hash(password)
 
-def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta

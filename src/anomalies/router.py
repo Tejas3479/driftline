@@ -1,25 +1,32 @@
 from datetime import date
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from src.auth.dependencies import get_current_user
-from src.ingestion.service import verify_metric_access
-from src.auth.models import User
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.db.session import get_db
-from src.anomalies.models import AnomalyTypeEnum, AnomalyStatusEnum
-from src.anomalies.schemas import TimeseriesResponseSchema, AnomalyResponseSchema, AnomalyDetailResponseSchema, AnomalyFeedbackSchema, GlobalAnomalyResponseSchema
-import src.anomalies.service as service
-from src.limiter import limiter
+
+from src.anomalies import service
+from src.anomalies.models import AnomalyStatusEnum, AnomalyTypeEnum
+from src.anomalies.schemas import (
+    AnomalyDetailResponseSchema,
+    AnomalyFeedbackSchema,
+    AnomalyResponseSchema,
+    GlobalAnomalyResponseSchema,
+    TimeseriesResponseSchema,
+)
 from src.audit import audit_log
+from src.auth.dependencies import get_current_user
+from src.auth.models import User
+from src.db.session import get_db
+from src.ingestion.service import verify_metric_access
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-@router.get("/anomalies", response_model=List[GlobalAnomalyResponseSchema])
+@router.get("/anomalies", response_model=list[GlobalAnomalyResponseSchema])
 @limiter.limit("60/minute")
 async def list_global_anomalies_endpoint(
     request: Request,
-    status: Optional[str] = Query(None, description="Status filter e.g. new, reviewed, resolved, false_positive"),
-    metric_id: Optional[int] = Query(None, description="Metric ID filter"),
+    status: str | None = Query(None, description="Status filter e.g. new, reviewed, resolved, false_positive"),
+    metric_id: int | None = Query(None, description="Metric ID filter"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -31,9 +38,9 @@ async def list_global_anomalies_endpoint(
 async def get_metric_timeseries_endpoint(
     request: Request,
     id: int,
-    start: Optional[date] = Query(None),
-    end: Optional[date] = Query(None),
-    segment: Optional[str] = Query(None, description="Segment filter formatted as dimension:value"),
+    start: date | None = Query(None),
+    end: date | None = Query(None),
+    segment: str | None = Query(None, description="Segment filter formatted as dimension:value"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -71,14 +78,14 @@ async def trigger_metric_rollup_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/metrics/{id}/anomalies", response_model=List[AnomalyResponseSchema])
+@router.get("/metrics/{id}/anomalies", response_model=list[AnomalyResponseSchema])
 @limiter.limit("60/minute")
 async def list_anomalies_endpoint(
     request: Request,
     id: int,
-    status: Optional[AnomalyStatusEnum] = Query(None),
-    severity_min: Optional[float] = Query(None),
-    type: Optional[AnomalyTypeEnum] = Query(None),
+    status: AnomalyStatusEnum | None = Query(None),
+    severity_min: float | None = Query(None),
+    type: AnomalyTypeEnum | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

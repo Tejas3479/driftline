@@ -1,9 +1,10 @@
 import os
+
 import pytest
-from sqlalchemy import inspect
-from sqlalchemy.pool import NullPool
-from sqlalchemy.ext.asyncio import create_async_engine
 from dotenv import load_dotenv
+from sqlalchemy import inspect
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 load_dotenv()
 

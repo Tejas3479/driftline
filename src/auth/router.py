@@ -1,25 +1,27 @@
 from datetime import timedelta
-import structlog
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from typing import Any
 
-from src.db.session import get_db
-from src.auth.models import User
-from src.db.models import Workspace
-from src.auth.schemas import UserCreate, UserRead, Token
-from src.auth.security import (
-    get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES,
-    COOKIE_NAME, COOKIE_SECURE, COOKIE_HTTPONLY, COOKIE_SAMESITE, COOKIE_MAX_AGE
-)
-from src.auth.dependencies import get_current_user
-from src.limiter import limiter
-from fastapi import Response
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.auth.service import register_user, authenticate_user
 from src.audit import audit_log
+from src.auth.dependencies import get_current_user
+from src.auth.models import User
+from src.auth.schemas import UserCreate, UserRead
+from src.auth.security import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    COOKIE_HTTPONLY,
+    COOKIE_MAX_AGE,
+    COOKIE_NAME,
+    COOKIE_SAMESITE,
+    COOKIE_SECURE,
+    create_access_token,
+)
+from src.auth.service import authenticate_user, register_user
+from src.db.session import get_db
+from src.limiter import limiter
 
 logger = structlog.get_logger(__name__)
 

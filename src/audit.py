@@ -9,8 +9,9 @@ Usage:
     from src.audit import audit_log
     audit_log("metric.created", user_id=current_user.id, resource_id=metric.id, details={"name": metric.name})
 """
+from typing import Any
+
 import structlog
-from typing import Any, Dict, Optional
 
 _audit_logger = structlog.get_logger("audit")
 
@@ -18,12 +19,12 @@ _audit_logger = structlog.get_logger("audit")
 def audit_log(
     action: str,
     *,
-    user_id: Optional[int] = None,
-    user_email: Optional[str] = None,
-    workspace_id: Optional[int] = None,
-    resource_type: Optional[str] = None,
-    resource_id: Optional[int] = None,
-    details: Optional[Dict[str, Any]] = None,
+    user_id: int | None = None,
+    user_email: str | None = None,
+    workspace_id: int | None = None,
+    resource_type: str | None = None,
+    resource_id: int | None = None,
+    details: dict[str, Any] | None = None,
 ) -> None:
     """
     Emit a structured audit log entry.
@@ -37,7 +38,7 @@ def audit_log(
         resource_id: The ID of the resource being acted upon.
         details: Additional context (e.g. changed fields, old/new values).
     """
-    log_data: Dict[str, Any] = {
+    log_data: dict[str, Any] = {
         "audit": True,
         "action": action,
     }

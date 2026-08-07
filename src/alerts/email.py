@@ -1,10 +1,10 @@
 import os
 import smtplib
-import structlog
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
-from typing import Optional
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -20,7 +20,7 @@ def send_weekly_digest_email(
     metric_name: str,
     period_str: str,
     pdf_path: str,
-    recipient_email: Optional[str] = None
+    recipient_email: str | None = None
 ) -> bool:
     """
     Constructs and sends an HTML email with the weekly digest PDF attached.
@@ -55,7 +55,7 @@ def send_weekly_digest_email(
                 attach.add_header("Content-Disposition", "attachment", filename=os.path.basename(pdf_path))
                 msg.attach(attach)
         except Exception as e:
-            logger.warning(f"Failed to attach PDF file '{pdf_path}' to digest email: {str(e)}")
+            logger.warning(f"Failed to attach PDF file '{pdf_path}' to digest email: {e!s}")
 
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
@@ -66,7 +66,7 @@ def send_weekly_digest_email(
         logger.info(f"Successfully sent weekly digest email for '{metric_name}' to {to_email}")
         return True
     except Exception as e:
-        logger.warning(f"SMTP dispatch failed for weekly digest email to {to_email}: {str(e)}")
+        logger.warning(f"SMTP dispatch failed for weekly digest email to {to_email}: {e!s}")
         return False
 
 def send_immediate_alert_email(
@@ -75,7 +75,7 @@ def send_immediate_alert_email(
     anomaly_date: str,
     severity_score: float,
     explanation_text: str,
-    recipient_email: Optional[str] = None
+    recipient_email: str | None = None
 ) -> bool:
     """
     Constructs and sends an HTML email for an immediate high-severity anomaly alert.
@@ -118,5 +118,5 @@ def send_immediate_alert_email(
         logger.info(f"Successfully sent immediate anomaly alert email for '{metric_name}' to {to_email}")
         return True
     except Exception as e:
-        logger.warning(f"SMTP dispatch failed for immediate alert email to {to_email}: {str(e)}")
+        logger.warning(f"SMTP dispatch failed for immediate alert email to {to_email}: {e!s}")
         return False

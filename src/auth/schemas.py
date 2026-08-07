@@ -1,5 +1,6 @@
+
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -22,4 +23,4 @@ class Token(BaseModel):
     token_type: str
 
 class TokenData(BaseModel):
-    user_id: Optional[int] = None
+    user_id: int | None = None

@@ -1,7 +1,9 @@
 import logging
 import sys
+
 import structlog
 from asgi_correlation_id import correlation_id
+
 
 def add_correlation_id(logger, method_name, event_dict):
     """Injects the request ID into the structured log dictionary."""

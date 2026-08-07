@@ -21,7 +21,7 @@ import GlowButton from "@/components/GlowButton";
 import DataUploadModal from "@/components/DataUploadModal";
 import { useApi } from "@/hooks/useApi";
 import { useSWRConfig } from "swr";
-import { Metric, TimeseriesResponse, Anomaly } from "@/app/api";
+import { Metric, TimeseriesResponse, Anomaly, TimeseriesPoint } from "@/app/api";
 
 function MetricCard({ metric }: { metric: Metric }) {
   const { data: tsData, isLoading: tsLoading } = useApi<TimeseriesResponse>(`/api/v1/metrics/${metric.id}/timeseries`);

@@ -1,0 +1,20 @@
+[lint]
+# Exclude certain rules globally
+ignore = [
+    "B008",    # Do not perform function call `Depends` in argument defaults (standard in FastAPI)
+    "ASYNC230",# Async functions should not open files with blocking methods (fine for local tests/scripts)
+    "DTZ",     # flake8-datetimez (project uses naive datetimes)
+    "RUF015",  # Prefer next(...) over single element slice
+    "RUF059",  # Unpacked variable is never used
+    "F841",    # Local variable is assigned to but never used
+    "B023",    # Function definition does not bind loop variable
+    "F821",    # Undefined name (used heavily in SQLAlchemy Mapped type hints)
+    "BLE001",  # Do not catch blind exception `Exception`
+    "G201",    # Logging .exception instead of .error(exc_info=True)
+    "SIM102",  # Use a single `if` statement instead of nested `if` statements
+    "PLW1508", # Invalid type for environment variable default; expected `str` or `None`
+]
+
+[lint.per-file-ignores]
+# Ignore some strictness in tests
+"tests/**/*.py" = ["E501", "F401", "F841", "RUF015", "RUF059", "ASYNC230"]

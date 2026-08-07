@@ -1,17 +1,17 @@
 import os
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
-from src.auth.dependencies import get_current_user
-from src.ingestion.service import verify_metric_access
-from src.auth.models import User
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.session import get_db
-from src.digests.schemas import DigestResponseSchema, DigestGenerateRequestSchema
-from src.digests.service import generate_weekly_digest, get_digest_by_id, list_digests
-from src.limiter import limiter
 from src.audit import audit_log
+from src.auth.dependencies import get_current_user
+from src.auth.models import User
+from src.db.session import get_db
+from src.digests.schemas import DigestGenerateRequestSchema, DigestResponseSchema
+from src.digests.service import generate_weekly_digest, get_digest_by_id, list_digests
+from src.ingestion.service import verify_metric_access
+from src.limiter import limiter
 
 router = APIRouter(dependencies=[Depends(get_current_user)], tags=["digests"])
 
@@ -41,11 +41,11 @@ async def get_digest_pdf_endpoint(
         filename=file_basename
     )
 
-@router.get("/digests", response_model=List[DigestResponseSchema])
+@router.get("/digests", response_model=list[DigestResponseSchema])
 @limiter.limit("30/minute")
 async def list_digests_endpoint(
     request: Request,
-    metric_id: Optional[int] = Query(None, description="Optional metric ID filter"),
+    metric_id: int | None = Query(None, description="Optional metric ID filter"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -73,4 +73,4 @@ async def generate_digest_endpoint(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate digest PDF: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to generate digest PDF: {e!s}")

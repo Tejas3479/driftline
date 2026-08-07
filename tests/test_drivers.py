@@ -1,17 +1,18 @@
-import pytest
-import numpy as np
-import pandas as pd
 from datetime import date, timedelta
+
 import httpx
+import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from main import app
-from src.db.session import DATABASE_URL, get_db
-from src.ingestion.models import Metric, Observation
 from src.anomalies.models import Anomaly, DailyRollup
-from src.drivers.service import calculate_anomaly_drivers, train_and_persist_structural_importance
+from src.db.session import get_db
+from src.drivers.service import (
+    calculate_anomaly_drivers,
+    train_and_persist_structural_importance,
+)
+
 
 @pytest.mark.asyncio
 async def test_driver_mathematical_invariant(db: AsyncSession):
@@ -178,7 +179,7 @@ async def test_driver_anomaly_injection():
         anoms = anom_res.json()
         assert len(anoms) >= 1
 
-        target_anom = [a for a in anoms if a["date"] == "2026-02-05"][0]
+        target_anom = next(a for a in anoms if a["date"] == "2026-02-05")
         anom_id = target_anom["id"]
 
         # Call GET /anomalies/{id}/drivers
@@ -299,7 +300,7 @@ async def test_multi_segment_anomalies_explanation():
         await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "dimension_cols": ["channel"], "rows": rows, "replace": True})
 
         anom_res = await client.get(f"/api/v1/metrics/{metric_id}/anomalies")
-        target_anom = [a for a in anom_res.json() if a["date"] == "2026-02-05"][0]
+        target_anom = next(a for a in anom_res.json() if a["date"] == "2026-02-05")
 
         drivers_res = await client.get(f"/api/v1/anomalies/{target_anom['id']}/drivers")
         text = drivers_res.json()["explanation_text"]
@@ -346,12 +347,12 @@ async def test_segment_comparison_spec_and_filtering():
                 name = s.get("data", {}).get("name")
                 if name and name in s["datasets"]:
                     return s["datasets"][name]
-                return list(s["datasets"].values())[0]
+                return next(iter(s["datasets"].values()))
             return []
 
         values = extract_records(spec)
         assert len(values) > 0
-        seg_vals = set(v["segment_value"] for v in values)
+        seg_vals = {v["segment_value"] for v in values}
         assert seg_vals == {"organic", "paid", "referral"}
 
         # Verify shared y-scale domain in encoding

@@ -1,18 +1,23 @@
 import asyncio
-import structlog
-import json
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date, timedelta
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from sqlalchemy import select, delete, case
+import structlog
+from sqlalchemy import case, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ingestion.models import Metric, DimensionDef, Observation
-from src.anomalies.models import DailyRollup, Anomaly, AnomalyTypeEnum, AnomalyStatusEnum
-from src.anomalies.schemas import TimeseriesPointSchema
 from src.alerts.service import evaluate_and_trigger_alerts_for_metric
+from src.anomalies.models import (
+    Anomaly,
+    AnomalyStatusEnum,
+    AnomalyTypeEnum,
+    DailyRollup,
+)
+from src.anomalies.schemas import TimeseriesPointSchema
+from src.ingestion.models import DimensionDef, Metric, Observation
 
 logger = structlog.get_logger(__name__)
 
@@ -96,7 +101,7 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
     dimension_names = dim_defs_res.scalars().all()
 
     # Prep list of new timeseries groups
-    timeseries_groups: List[tuple[Dict[str, str], List[Observation]]] = []
+    timeseries_groups: list[tuple[dict[str, str], list[Observation]]] = []
     timeseries_groups.append(({}, list(new_observations)))
 
     for dim_name in dimension_names:
@@ -204,12 +209,12 @@ async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -
     # Trigger anomaly detection and persistence
     await detect_and_persist_anomalies(db, metric_id)
 
-async def get_metric(db: AsyncSession, metric_id: int) -> Optional[Metric]:
+async def get_metric(db: AsyncSession, metric_id: int) -> Metric | None:
     """Retrieve metric by ID."""
     result = await db.execute(select(Metric).where(Metric.id == metric_id))
     return result.scalar_one_or_none()
 
-def compute_scaled_mad(residuals: np.ndarray, values: np.ndarray) -> Optional[float]:
+def compute_scaled_mad(residuals: np.ndarray, values: np.ndarray) -> float | None:
     """
     Computes the scaled Median Absolute Deviation (MAD) over a series of residuals and values.
     Returns None if the series is empty, or if the early return flat-series condition is met (mad_scaled < 1e-9).
@@ -228,7 +233,7 @@ def compute_scaled_mad(residuals: np.ndarray, values: np.ndarray) -> Optional[fl
         return None
     return float(mad_scaled)
 
-def compute_timeseries_anomaly_signals(metric: Metric, rollups: List[DailyRollup]) -> Optional[pd.DataFrame]:
+def compute_timeseries_anomaly_signals(metric: Metric, rollups: list[DailyRollup]) -> pd.DataFrame | None:
     """
     Unified source of truth for time series anomaly signals calculation.
     Returns a pandas DataFrame of valid points (where trend is not null) containing:
@@ -477,10 +482,10 @@ async def detect_and_persist_anomalies(db: AsyncSession, metric_id: int) -> None
 async def get_anomalies(
     db: AsyncSession,
     metric_id: int,
-    status_filter: Optional[AnomalyStatusEnum] = None,
-    severity_min: Optional[float] = None,
-    type_filter: Optional[AnomalyTypeEnum] = None
-) -> List[Anomaly]:
+    status_filter: AnomalyStatusEnum | None = None,
+    severity_min: float | None = None,
+    type_filter: AnomalyTypeEnum | None = None
+) -> list[Anomaly]:
     """List anomalies for a metric with query filtering."""
     query = select(Anomaly).where(Anomaly.metric_id == metric_id).order_by(Anomaly.date)
     
@@ -494,7 +499,7 @@ async def get_anomalies(
     res = await db.execute(query)
     return list(res.scalars().all())
 
-async def get_anomaly_detail(db: AsyncSession, anomaly_id: int, workspace_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
+async def get_anomaly_detail(db: AsyncSession, anomaly_id: int, workspace_id: int | None = None) -> dict[str, Any] | None:
     """Retrieve full details for a specific anomaly."""
     stmt = select(Anomaly, Metric).join(Metric, Anomaly.metric_id == Metric.id).where(Anomaly.id == anomaly_id)
     if workspace_id is not None:
@@ -506,7 +511,7 @@ async def get_anomaly_detail(db: AsyncSession, anomaly_id: int, workspace_id: Op
     anomaly, metric = row
     return {"anomaly": anomaly, "metric": metric}
 
-async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: AnomalyStatusEnum, workspace_id: Optional[int] = None) -> Anomaly:
+async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: AnomalyStatusEnum, workspace_id: int | None = None) -> Anomaly:
     """Record anomaly feedback (reviews, false positives, etc.) and run weight updates/updates on false positives."""
     detail = await get_anomaly_detail(db, anomaly_id, workspace_id)
     if not detail:
@@ -578,10 +583,10 @@ async def record_anomaly_feedback(db: AsyncSession, anomaly_id: int, status: Ano
 async def get_metric_timeseries(
     db: AsyncSession,
     metric_id: int,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    segment: Optional[str] = None
-) -> Tuple[List[TimeseriesPointSchema], Optional[float]]:
+    start_date: date | None = None,
+    end_date: date | None = None,
+    segment: str | None = None
+) -> tuple[list[TimeseriesPointSchema], float | None]:
     """
     Returns the rollup points for the requested metric, date range, and segment filter,
     along with the historical scaled MAD calculated over the target series history.
@@ -635,11 +640,11 @@ async def get_metric_timeseries(
 
 async def list_global_anomalies(
     db: AsyncSession,
-    status_filter: Optional[str] = None,
-    metric_id: Optional[int] = None,
-    workspace_id: Optional[int] = None,
+    status_filter: str | None = None,
+    metric_id: int | None = None,
+    workspace_id: int | None = None,
     limit: int = 200
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Returns a list of all detected anomalies joined with Metric names,
     optionally filtered by status or metric_id, ordered by date descending.

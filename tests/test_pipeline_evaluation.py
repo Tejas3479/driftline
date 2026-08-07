@@ -1,9 +1,10 @@
 import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from src.db.session import DATABASE_URL
 from scripts.evaluate_pipeline import run_pipeline_evaluation
+from src.db.session import DATABASE_URL
+
 
 @pytest.mark.asyncio
 async def test_pipeline_ground_truth_evaluation():

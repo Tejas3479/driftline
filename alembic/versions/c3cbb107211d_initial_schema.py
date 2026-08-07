@@ -5,17 +5,18 @@ Revises:
 Create Date: 2026-07-21 03:22:13.219362
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = 'c3cbb107211d'
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # Declare PostgreSQL ENUM types with create_type=False so table creation does not trigger duplicate DDL
 direction_good_enum = postgresql.ENUM('up_is_good', 'down_is_good', name='direction_good_enum', create_type=False)

@@ -1,10 +1,9 @@
-import os
 import json
+
 import pytest
-import pandas as pd
-import numpy as np
 
 from scripts.generate_synthetic_data import generate_synthetic_dataset
+
 
 def test_synthetic_generator_determinism():
     """
@@ -48,7 +47,7 @@ def test_diff_based_numerical_correctness():
     3. Level-Shift (>= 2025-03-25): Injected / Base ratio == 1.15 (+15%)
     4. Volatility (2025-08-22 to 2025-09-05): Self-serve noise scaled by x4.5
     """
-    df_inj, spec = generate_synthetic_dataset(seed=42, inject_anomalies=True)
+    df_inj, _spec = generate_synthetic_dataset(seed=42, inject_anomalies=True)
     df_base, _ = generate_synthetic_dataset(seed=42, inject_anomalies=False)
 
     df_inj["diff"] = df_inj["mrr"] - df_base["mrr"]
@@ -57,13 +56,13 @@ def test_diff_based_numerical_correctness():
     spike_rows = df_inj[(df_inj["date"] == "2024-04-29") & (df_inj["channel"] == "Paid")]
     assert len(spike_rows) == 3
     total_paid_spike_diff = spike_rows["diff"].sum()
-    pytest.approx(total_paid_spike_diff, abs=0.1) == 8000.0
+    assert total_paid_spike_diff == pytest.approx(8000.0, abs=0.1)
 
     # 2. DIP test on 2024-10-06 for Enterprise plan
     dip_rows = df_inj[(df_inj["date"] == "2024-10-06") & (df_inj["plan"] == "Enterprise")]
     assert len(dip_rows) == 3
     total_enterprise_dip_diff = dip_rows["diff"].sum()
-    pytest.approx(total_enterprise_dip_diff, abs=0.1) == -6500.0
+    assert total_enterprise_dip_diff == pytest.approx(-6500.0, abs=0.1)
 
     # 3. LEVEL-SHIFT test for dates >= 2025-03-25 (excluding single day events)
     ls_rows_inj = df_inj[(df_inj["date"] >= "2025-03-25") & (df_inj["date"] != "2025-08-22")]

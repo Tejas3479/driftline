@@ -1,24 +1,31 @@
 import uuid
+from typing import Any
+
 import structlog
-from typing import Any, Dict, List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.session import AsyncSessionLocal
-from src.ingestion.models import Metric
 from src.anomalies.models import Anomaly
 from src.anomalies.service import run_daily_rollup_and_decomposition
-from src.drivers.service import calculate_anomaly_drivers, train_and_persist_structural_importance
-from src.forecasting.service import generate_multi_step_forecast, run_walk_forward_backtest
-from src.digests.service import generate_weekly_digest
+from src.db.session import AsyncSessionLocal
 from src.digests.models import Digest
+from src.digests.service import generate_weekly_digest
+from src.drivers.service import (
+    calculate_anomaly_drivers,
+    train_and_persist_structural_importance,
+)
+from src.forecasting.service import (
+    generate_multi_step_forecast,
+    run_walk_forward_backtest,
+)
+from src.ingestion.models import Metric
 
 logger = structlog.get_logger(__name__)
 
 async def run_daily_pipeline(
-    db: Optional[AsyncSession] = None,
-    metric_ids: Optional[List[int]] = None
-) -> List[Dict[str, Any]]:
+    db: AsyncSession | None = None,
+    metric_ids: list[int] | None = None
+) -> list[dict[str, Any]]:
     """
     Daily scheduled job:
     For every metric (or filtered metric_ids): re-runs decomposition on new data, runs anomaly detection, and computes driver analysis.
@@ -55,7 +62,7 @@ async def run_daily_pipeline(
                     driver_data = await calculate_anomaly_drivers(db, anomaly.id, workspace_id=w_id)
                     anomaly.explanation_text = driver_data["explanation_text"]
                 except Exception as ex:
-                    logger.warning(f"Driver analysis skipped for anomaly #{anomaly.id}: {str(ex)}")
+                    logger.warning(f"Driver analysis skipped for anomaly #{anomaly.id}: {ex!s}")
 
             await db.commit()
 
@@ -64,20 +71,20 @@ async def run_daily_pipeline(
                 from src.alerts.service import evaluate_and_trigger_alerts_for_metric
                 await evaluate_and_trigger_alerts_for_metric(db, m_id)
             except Exception as alert_ex:
-                logger.warning(f"Alert evaluation failed for metric #{m_id}: {str(alert_ex)}")
+                logger.warning(f"Alert evaluation failed for metric #{m_id}: {alert_ex!s}")
 
             results.append({"metric_id": m_id, "status": "success", "anomalies_count": len(anomalies)})
         except Exception as e:
-            logger.error(f"Daily pipeline failed for metric #{m_id}: {str(e)}", exc_info=True)
+            logger.error(f"Daily pipeline failed for metric #{m_id}: {e!s}", exc_info=True)
             await db.rollback()
             results.append({"metric_id": m_id, "status": "failed", "error": str(e)})
 
     return results
 
 async def run_weekly_retrain_and_digest(
-    db: Optional[AsyncSession] = None,
-    metric_ids: Optional[List[int]] = None
-) -> List[Digest]:
+    db: AsyncSession | None = None,
+    metric_ids: list[int] | None = None
+) -> list[Digest]:
     """
     Weekly scheduled job:
     For every metric (or filtered metric_ids): retrains CatBoost structural importance, retrains forecasting models,
@@ -125,10 +132,10 @@ async def run_weekly_retrain_and_digest(
                     pdf_path=digest.pdf_path
                 )
             except Exception as mail_ex:
-                logger.warning(f"Weekly digest email dispatch failed for metric #{m_id}: {str(mail_ex)}")
+                logger.warning(f"Weekly digest email dispatch failed for metric #{m_id}: {mail_ex!s}")
 
         except Exception as e:
-            logger.error(f"Weekly retrain & digest failed for metric #{m_id}: {str(e)}", exc_info=True)
+            logger.error(f"Weekly retrain & digest failed for metric #{m_id}: {e!s}", exc_info=True)
             await db.rollback()
 
     return digests

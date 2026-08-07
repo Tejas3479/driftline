@@ -1,13 +1,14 @@
 from datetime import date, datetime
-from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, field_validator
+
 
 class DigestResponseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     workspace_id: int
-    metric_id: Optional[int] = None
+    metric_id: int | None = None
     period_start: date
     period_end: date
     pdf_path: str
@@ -21,4 +22,4 @@ class DigestResponseSchema(BaseModel):
 
 class DigestGenerateRequestSchema(BaseModel):
     metric_id: int
-    workspace_id: Optional[int] = 1
+    workspace_id: int | None = 1
