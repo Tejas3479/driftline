@@ -22,7 +22,6 @@
     "react-dom": "^18.2.0",
     "react-plotly.js": "^2.6.0",
     "swr": "^2.4.2",
-    "tone": "^15.1.22",
     "vega": "^6.3.1",
     "vega-embed": "^7.1.0",
     "vega-lite": "^6.4.3"
