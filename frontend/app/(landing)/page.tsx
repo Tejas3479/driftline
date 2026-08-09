@@ -12,7 +12,6 @@ import {
   FileText,
   ArrowRight,
   CheckCircle2,
-  Github,
   Zap,
   Target,
   Clock,
@@ -576,13 +575,6 @@ export default function LandingPage() {
               <GlowButton href="/dashboard" variant="primary" size="lg" magnetic>
                 Open Dashboard <ArrowRight className="h-4 w-4 ml-1" />
               </GlowButton>
-              <GlowButton
-                href="https://github.com"
-                variant="secondary"
-                size="lg"
-              >
-                <Github className="h-4 w-4 mr-1" /> View on GitHub
-              </GlowButton>
             </div>
           </ScrollReveal>
         </div>
@@ -605,9 +597,6 @@ export default function LandingPage() {
           <div className="flex items-center gap-6 text-xs text-slate-500">
             <a href="/dashboard" className="hover:text-white transition-colors">
               Dashboard
-            </a>
-            <a href="https://github.com" className="hover:text-white transition-colors">
-              GitHub
             </a>
             <a href="#features" className="hover:text-white transition-colors">
               Features
