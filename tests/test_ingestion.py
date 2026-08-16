@@ -112,10 +112,8 @@ async def test_append_vs_replace_semantics():
         assert confirm_data2["total_observations"] == 4
 
 @pytest.mark.asyncio
-async def test_replace_invalidates_derived_data():
+async def test_replace_invalidates_derived_data(db):
     from sqlalchemy import func, select
-
-    from src.db.session import AsyncSessionLocal
     from src.forecasting.models import Forecast, ForecastAccuracyLog
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
@@ -136,11 +134,10 @@ async def test_replace_invalidates_derived_data():
         fc = await client.post(f"/api/v1/metrics/{metric_id}/forecast?horizon=7")
         assert fc.status_code == 200
 
-        async with AsyncSessionLocal() as db_session:
-            forecast_count = (await db_session.execute(
-                select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric_id)
-            )).scalar()
-            assert forecast_count == 7
+        forecast_count = (await db.execute(
+            select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric_id)
+        )).scalar()
+        assert forecast_count == 7
 
         # Replace the metric's data entirely
         confirm2 = await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
@@ -148,12 +145,11 @@ async def test_replace_invalidates_derived_data():
         })
         assert confirm2.status_code == 200
 
-        async with AsyncSessionLocal() as db_session:
-            forecast_after = (await db_session.execute(
-                select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric_id)
-            )).scalar()
-            acc_after = (await db_session.execute(
-                select(func.count()).select_from(ForecastAccuracyLog).where(ForecastAccuracyLog.metric_id == metric_id)
-            )).scalar()
-            assert forecast_after == 0
-            assert acc_after == 0
+        forecast_after = (await db.execute(
+            select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric_id)
+        )).scalar()
+        acc_after = (await db.execute(
+            select(func.count()).select_from(ForecastAccuracyLog).where(ForecastAccuracyLog.metric_id == metric_id)
+        )).scalar()
+        assert forecast_after == 0
+        assert acc_after == 0
