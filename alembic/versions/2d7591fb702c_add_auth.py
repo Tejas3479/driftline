@@ -24,8 +24,9 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('hashed_password', sa.String(length=255), nullable=True))
     op.add_column('users', sa.Column('is_active', sa.Boolean(), server_default='true', nullable=True))
     
-    # Set default password ("password123") for existing mock users
-    op.execute("UPDATE users SET hashed_password = '$2b$12$N.5y3.6e7R1tX5vKqJ.R0uF4lP4sMv0kR4lP4sMv0kR4lP4sMv0k'")
+    # Never set a real default password for existing users. Assign a random
+    # non-argon2 string so any pre-existing accounts cannot be logged into.
+    op.execute("UPDATE users SET hashed_password = md5(random()::text || clock_timestamp()::text) WHERE hashed_password IS NOT NULL")
     op.execute("UPDATE users SET is_active = true")
 
     op.alter_column('users', 'hashed_password', existing_type=sa.String(length=255), nullable=False)

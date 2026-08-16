@@ -225,6 +225,20 @@ export async function fetchForecast(
   return res.json();
 }
 
+export async function generateForecast(
+  metricId: number,
+  horizon: number = 30,
+  backend: string = 'lightgbm',
+  signal?: AbortSignal
+): Promise<ForecastResult> {
+  const url = `${API_BASE_URL}/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}`;
+  const res = await apiFetch(url, { method: 'POST', cache: 'no-store', signal });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to generate forecast for metric ${metricId}`);
+  }
+  return res.json();
+}
+
 export async function fetchAccuracy(
   metricId: number,
   horizon: number = 30,
@@ -235,6 +249,20 @@ export async function fetchAccuracy(
   const res = await apiFetch(url, { cache: 'no-store', signal });
   if (!res.ok) {
     throw await parseErrorDetail(res, `Failed to fetch forecast accuracy for metric ${metricId}`);
+  }
+  return res.json();
+}
+
+export async function generateAccuracy(
+  metricId: number,
+  horizon: number = 30,
+  backend: string = 'lightgbm',
+  signal?: AbortSignal
+): Promise<AccuracyResponse> {
+  const url = `${API_BASE_URL}/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}`;
+  const res = await apiFetch(url, { method: 'POST', cache: 'no-store', signal });
+  if (!res.ok) {
+    throw await parseErrorDetail(res, `Failed to run backtest for metric ${metricId}`);
   }
   return res.json();
 }

@@ -2,7 +2,7 @@ import uuid
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.anomalies.models import Anomaly
@@ -22,6 +22,25 @@ from src.ingestion.models import Metric
 
 logger = structlog.get_logger(__name__)
 
+# Advisory lock keys: guarantee a single scheduler instance runs each job even
+# when the app runs multiple gunicorn workers (each worker starts its own AsyncIOScheduler).
+DAILY_PIPELINE_LOCK_KEY = 790_001
+WEEKLY_RETRAIN_LOCK_KEY = 790_002
+
+
+async def _try_acquire_job_lock(session: AsyncSession, key: int) -> bool:
+    res = await session.execute(
+        text("SELECT pg_try_advisory_lock(:key)"), {"key": key}
+    )
+    return bool(res.scalar_one_or_none())
+
+
+async def _release_job_lock(session: AsyncSession, key: int) -> None:
+    await session.execute(
+        text("SELECT pg_advisory_unlock(:key)"), {"key": key}
+    )
+
+
 async def run_daily_pipeline(
     db: AsyncSession | None = None,
     metric_ids: list[int] | None = None
@@ -34,7 +53,13 @@ async def run_daily_pipeline(
     structlog.contextvars.bind_contextvars(request_id=f"sched-{uuid.uuid4().hex[:8]}")
     if db is None:
         async with AsyncSessionLocal() as session:
-            return await run_daily_pipeline(db=session, metric_ids=metric_ids)
+            if not await _try_acquire_job_lock(session, DAILY_PIPELINE_LOCK_KEY):
+                logger.info("run_daily_pipeline skipped: advisory lock already held by another scheduler instance")
+                return []
+            try:
+                return await run_daily_pipeline(db=session, metric_ids=metric_ids)
+            finally:
+                await _release_job_lock(session, DAILY_PIPELINE_LOCK_KEY)
 
     stmt = select(Metric)
     if metric_ids:
@@ -94,7 +119,13 @@ async def run_weekly_retrain_and_digest(
     structlog.contextvars.bind_contextvars(request_id=f"sched-{uuid.uuid4().hex[:8]}")
     if db is None:
         async with AsyncSessionLocal() as session:
-            return await run_weekly_retrain_and_digest(db=session, metric_ids=metric_ids)
+            if not await _try_acquire_job_lock(session, WEEKLY_RETRAIN_LOCK_KEY):
+                logger.info("run_weekly_retrain_and_digest skipped: advisory lock already held by another scheduler instance")
+                return []
+            try:
+                return await run_weekly_retrain_and_digest(db=session, metric_ids=metric_ids)
+            finally:
+                await _release_job_lock(session, WEEKLY_RETRAIN_LOCK_KEY)
 
     stmt = select(Metric)
     if metric_ids:

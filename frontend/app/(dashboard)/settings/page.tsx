@@ -99,7 +99,13 @@ export default function ModelHealthSettingsPage() {
 
         const [accData, fcData] = await Promise.all([
           fetchAccuracy(currentMetric.id, 30, "lightgbm", signal),
-          fetchForecast(currentMetric.id, 30, "lightgbm", signal),
+          fetchForecast(currentMetric.id, 30, "lightgbm", signal).catch((e: unknown) => {
+            const err = e instanceof Error ? e : new Error(String(e));
+            if (err.message.includes("No stored forecast")) {
+              return null;
+            }
+            throw err;
+          }),
         ]);
 
         setAccuracy(accData);

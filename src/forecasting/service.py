@@ -238,6 +238,62 @@ def format_forecast_result(metric_id: int, horizon: int, res: dict[str, Any]) ->
         forecasts=forecast_points,
     )
 
+
+async def read_latest_forecast(
+    metric_id: int,
+    session: AsyncSession,
+    model_backend: str = "lightgbm",
+) -> dict[str, Any] | None:
+    """
+    Read-only: returns the most recently generated total-metric forecast batch
+    (dimension_values == {}) for the metric/backend as a ForecastResultSchema dict.
+    Returns None when no stored forecast exists yet.
+    """
+    stmt = (
+        select(Forecast)
+        .where(
+            Forecast.metric_id == metric_id,
+            Forecast.model_backend == model_backend,
+            Forecast.dimension_values == {},
+        )
+        .order_by(Forecast.generated_at.desc(), Forecast.forecast_date.desc())
+    )
+    res = await session.execute(stmt)
+    rows = list(res.scalars().all())
+    if not rows:
+        return None
+
+    latest_generated_at = rows[0].generated_at
+    batch = [r for r in rows if r.generated_at == latest_generated_at]
+    batch.sort(key=lambda r: (r.forecast_date, r.horizon_days))
+
+    first = batch[0]
+    horizon_days = max(r.horizon_days for r in batch)
+    model_version = first.model_version
+
+    points = [
+        ForecastPointSchema(
+            metric_id=metric_id,
+            forecast_date=r.forecast_date,
+            horizon_days=r.horizon_days,
+            p10=r.p10,
+            p50=r.p50,
+            p90=r.p90,
+            dimension_values={},
+            model_version=r.model_version,
+        )
+        for r in batch
+    ]
+
+    return ForecastResultSchema(
+        metric_id=metric_id,
+        horizon_days=horizon_days,
+        as_of_date=first.forecast_date - timedelta(days=first.horizon_days),
+        model_version=model_version,
+        low_confidence=model_version == "naive-seasonal-v1",
+        forecasts=points,
+    )
+
 async def generate_multi_step_forecast(
     metric_id: int,
     session: AsyncSession,

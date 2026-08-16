@@ -435,7 +435,7 @@ async def test_cold_start_fallback_and_low_confidence_flag():
 @pytest.mark.asyncio
 async def test_forecast_accuracy_endpoint():
     """
-    Tests GET /metrics/{id}/forecast and GET /metrics/{id}/accuracy endpoints via httpx.AsyncClient.
+    Tests POST (generation) and GET (read-only) for /metrics/{id}/forecast and /metrics/{id}/accuracy via httpx.AsyncClient.
     """
     import httpx
 
@@ -457,25 +457,45 @@ async def test_forecast_accuracy_endpoint():
         confirm_res = await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={"date_col": "date", "value_col": "revenue", "rows": rows})
         assert confirm_res.status_code == 200
         
-        # Query GET /metrics/{id}/forecast
-        fc_res = await client.get(f"/api/v1/metrics/{metric_id}/forecast?horizon=14")
-        assert fc_res.status_code == 200
-        fc_data = fc_res.json()
+        # GET before generation returns 404 (read-only, nothing stored yet)
+        fc_missing = await client.get(f"/api/v1/metrics/{metric_id}/forecast?horizon=14")
+        assert fc_missing.status_code == 404
+        
+        # Generate forecast via POST
+        fc_post = await client.post(f"/api/v1/metrics/{metric_id}/forecast?horizon=14")
+        assert fc_post.status_code == 200
+        fc_data = fc_post.json()
         assert fc_data["metric_id"] == metric_id
         assert fc_data["horizon_days"] == 14
         assert fc_data["low_confidence"] is False
         assert len(fc_data["forecasts"]) == 14
         
-        # Query GET /metrics/{id}/accuracy
-        acc_res = await client.get(f"/api/v1/metrics/{metric_id}/accuracy?horizon=7")
-        assert acc_res.status_code == 200
-        acc_data = acc_res.json()
+        # Read-only GET returns the stored forecast
+        fc_get = await client.get(f"/api/v1/metrics/{metric_id}/forecast?horizon=14")
+        assert fc_get.status_code == 200
+        fc_get_data = fc_get.json()
+        assert fc_get_data["metric_id"] == metric_id
+        assert fc_get_data["horizon_days"] == 14
+        assert len(fc_get_data["forecasts"]) == 14
+        assert fc_get_data["forecasts"][0]["p50"] == fc_data["forecasts"][0]["p50"]
+        
+        # Run backtest via POST
+        acc_post = await client.post(f"/api/v1/metrics/{metric_id}/accuracy?horizon=7")
+        assert acc_post.status_code == 200
+        acc_data = acc_post.json()
         assert acc_data["metric_id"] == metric_id
         assert acc_data["mape"] is not None
         assert acc_data["mape"] >= 0.0
         assert acc_data["coverage_pct"] is not None
         assert 0.0 <= acc_data["coverage_pct"] <= 1.0
         assert len(acc_data["points"]) > 0
+        
+        # Read-only GET returns the same aggregated accuracy
+        acc_get = await client.get(f"/api/v1/metrics/{metric_id}/accuracy?horizon=7")
+        assert acc_get.status_code == 200
+        acc_get_data = acc_get.json()
+        assert acc_get_data["mape"] == acc_data["mape"]
+        assert acc_get_data["coverage_pct"] == acc_data["coverage_pct"]
         
         print(f"\n>>> DEMO METRIC OBSERVED BACKTEST MAPE: {acc_data['mape']:.4f} ({acc_data['mape']*100:.2f}%) <<<")
 

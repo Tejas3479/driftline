@@ -29,8 +29,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email,
           password,
-          workspace_name: workspaceName,
-          role: "member"
+          workspace_name: workspaceName
         }),
       });
 

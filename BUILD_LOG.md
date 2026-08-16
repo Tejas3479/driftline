@@ -189,7 +189,7 @@
 - Added `layoutId="activeTabPill"` sliding tab indicators and `AnimatePresence` status badge morphing in `app/anomalies/page.tsx` and `components/FeedbackControl.tsx`; created `CountUp.tsx` component for animated KPI statistics counters in `components/ForecastStatsPanel.tsx`.
 - Decisions & Verification: Preserved all component props and API interfaces. Verified cleanly with 14/14 frontend Vitest tests and 52/52 backend pytest tests passing.
 
-## Session 14: Premium UI Transformation & Cinematic Landing Page
+## Session 14b: Premium UI Transformation & Cinematic Landing Page
 - Built 12 reusable animation components: SmoothScroll (Lenis), ScrollReveal (GSAP), TextReveal, TypewriterText, AnimatedCounter, AtroposCard (3D tilt), CustomCursor (dot+ring), GlowButton, MeteorShower, GrainOverlay, UISoundEngine (Web Audio API), upgraded PageTransition (spring+blur).
 - Created cinematic 7-section landing page: hero with animated mesh gradient + floating orbs + meteor shower + typewriter cycling headline + trust metric pills, tech trust strip, feature bento grid (6 cards), 3-step "how it works" timeline, performance stats with animated counters, open-source CTA, minimal footer.
 - Restructured routes into `(landing)` and `(dashboard)` route groups: `/` â†’ landing, `/dashboard` â†’ overview. Simplified root layout to minimal HTML shell, created per-group layouts with appropriate providers.
@@ -208,7 +208,7 @@
 
 ## Session 23: Exhaustive Codebase Audit & Product-Readiness Verification
 - Conducted full architectural, ML pipeline, database schema, and full-stack integration audit of Driftline against 2026 internet best practices.
-- Confirmed all 52 backend pytest tests pass (`52 passed in 345.40s`) and verified mathematical invariants across STL decomposition, MAD Z-score residuals, waterfall bridge attribution, CatBoost structural importance, and LightGBM quantile regression.
+- Confirmed all 52 backend pytest tests pass (`52 passed in 345.40s`) and verified mathematical invariants across rolling-mean trend/seasonal decomposition, MAD Z-score residuals, waterfall bridge attribution, CatBoost structural importance, and LightGBM quantile regression.
 - Identified critical "headless" UI disconnect: Data Ingestion (`POST /metrics/{id}/data`), Executive PDF Digests (`GET /digests`), and Alert Notifications (`GET /notifications`) are fully implemented and tested in the backend but 100% orphaned from the frontend.
 - Recommended immediate next step: extend `frontend/app/api.ts` with ingestion/digest/alert client wrappers and build `<DataUploadModal />` to complete the self-service user journey.
 

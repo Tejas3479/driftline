@@ -114,7 +114,9 @@ async def confirm_data_endpoint(
     try:
         result = await service.confirm_and_persist_observations(db, id, schema)
         audit_log("metric.data_confirmed", user_id=current_user.id, workspace_id=current_user.workspace_id,
-                 resource_type="metric", resource_id=id, details={"rows_inserted": result.get("rows_inserted", 0)})
+                 resource_type="metric", resource_id=id,
+                 details={"inserted_count": result.get("inserted_count", 0),
+                          "updated_count": result.get("updated_count", 0)})
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

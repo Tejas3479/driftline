@@ -23,7 +23,7 @@ async def register_user(db: AsyncSession, user_in: UserCreate) -> User:
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
         workspace_id=workspace.id,
-        role=user_in.role
+        role="admin"
     )
     db.add(user)
     # Commit the transaction containing both workspace and user

@@ -6,7 +6,6 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     workspace_name: str
-    role: str = "admin"
 
 class UserRead(BaseModel):
     id: int

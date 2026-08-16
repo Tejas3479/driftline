@@ -12,6 +12,8 @@ vi.mock("../app/api", () => {
     fetchTimeseries: vi.fn(),
     fetchForecast: vi.fn(),
     fetchAccuracy: vi.fn(),
+    generateForecast: vi.fn(),
+    generateAccuracy: vi.fn(),
   };
 });
 

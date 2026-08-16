@@ -1,4 +1,5 @@
 import io
+from datetime import date, timedelta
 
 import httpx
 import pytest
@@ -109,3 +110,50 @@ async def test_append_vs_replace_semantics():
         confirm_data2 = confirm_res2.json()
         assert confirm_data2["inserted_count"] == 2
         assert confirm_data2["total_observations"] == 4
+
+@pytest.mark.asyncio
+async def test_replace_invalidates_derived_data():
+    from sqlalchemy import func, select
+
+    from src.db.session import AsyncSessionLocal
+    from src.forecasting.models import Forecast, ForecastAccuracyLog
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        metric_res = await client.post("/api/v1/metrics", json={"name": "Replace Derived Data Test"})
+        assert metric_res.status_code == 201
+        metric_id = metric_res.json()["id"]
+
+        # Seed 80 days of data (>= 60 days so the ML forecast path is used)
+        start_d = date(2026, 1, 1)
+        rows = [{"date": (start_d + timedelta(days=i)).isoformat(), "revenue": 200.0 + i * 0.5} for i in range(80)]
+
+        confirm1 = await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date", "value_col": "revenue", "rows": rows, "replace": True
+        })
+        assert confirm1.status_code == 200
+
+        # Generate a forecast so derived tables are populated
+        fc = await client.post(f"/api/v1/metrics/{metric_id}/forecast?horizon=7")
+        assert fc.status_code == 200
+
+        async with AsyncSessionLocal() as db_session:
+            forecast_count = (await db_session.execute(
+                select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric_id)
+            )).scalar()
+            assert forecast_count == 7
+
+        # Replace the metric's data entirely
+        confirm2 = await client.post(f"/api/v1/metrics/{metric_id}/data/confirm", json={
+            "date_col": "date", "value_col": "revenue", "rows": rows, "replace": True
+        })
+        assert confirm2.status_code == 200
+
+        async with AsyncSessionLocal() as db_session:
+            forecast_after = (await db_session.execute(
+                select(func.count()).select_from(Forecast).where(Forecast.metric_id == metric_id)
+            )).scalar()
+            acc_after = (await db_session.execute(
+                select(func.count()).select_from(ForecastAccuracyLog).where(ForecastAccuracyLog.metric_id == metric_id)
+            )).scalar()
+            assert forecast_after == 0
+            assert acc_after == 0

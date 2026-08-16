@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { ArrowLeft, AlertTriangle, Activity, BarChart2, Filter, Info, ShieldCheck } from "lucide-react";
 import ScrollReveal from "@/components/ScrollReveal";
 import {
@@ -16,9 +17,18 @@ import {
 } from "@/app/api";
 import SegmentBarChart from "@/components/SegmentBarChart";
 import FeedbackControl from "@/components/FeedbackControl";
-import MetricChart from "@/components/MetricChart";
 import { useApi } from "@/hooks/useApi";
 import { useSWRConfig } from "swr";
+
+// Dynamically import Plotly chart component to prevent SSR window issues
+const MetricChart = dynamic(() => import("@/components/MetricChart"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-96 w-full items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-slate-400 animate-pulse">
+      Loading timeseries chart...
+    </div>
+  ),
+});
 
 export default function AnomalyDetailPage({ params }: { params: { id: string } }) {
   const anomalyId = parseInt(params.id, 10);

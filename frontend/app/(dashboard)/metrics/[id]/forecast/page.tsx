@@ -9,6 +9,8 @@ import {
   fetchTimeseries,
   fetchForecast,
   fetchAccuracy,
+  generateForecast,
+  generateAccuracy,
   Metric,
   TimeseriesPoint,
   ForecastResult,
@@ -16,6 +18,7 @@ import {
   TimeseriesResponse,
 } from "@/app/api";
 import { useApi } from "@/hooks/useApi";
+import { useSWRConfig } from "swr";
 import LowConfidenceBanner from "@/components/LowConfidenceBanner";
 import ForecastStatsPanel from "@/components/ForecastStatsPanel";
 import ScrollReveal from "@/components/ScrollReveal";
@@ -59,6 +62,9 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
   // Single unified state for controls
   const [horizon, setHorizon] = useState<HorizonOption>(30);
   const [backend, setBackend] = useState<BackendOption>("lightgbm");
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const { mutate } = useSWRConfig();
   
   const { data: forecastResult, error: fcError, isLoading: fcLoading } = useApi<ForecastResult>(
     !isNaN(metricId) ? `/api/v1/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}` : null
@@ -68,12 +74,32 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
     !isNaN(metricId) ? `/api/v1/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}` : null
   );
 
+  const handleGenerate = async () => {
+    if (isNaN(metricId)) return;
+    setGenerating(true);
+    try {
+      await Promise.all([
+        generateForecast(metricId, horizon, backend),
+        generateAccuracy(metricId, horizon, backend),
+      ]);
+      await Promise.all([
+        mutate(`/api/v1/metrics/${metricId}/forecast?horizon=${horizon}&backend=${backend}`),
+        mutate(`/api/v1/metrics/${metricId}/accuracy?horizon=${horizon}&backend=${backend}`),
+      ]);
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      setGenerateError(err.message || "Failed to generate forecast & backtest.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const metric = metrics?.find((m) => m.id === metricId) || null;
   const timeseriesData = tsData || null;
 
   const fetchingControls = fcLoading || accLoading;
   const loading = (metricsLoading || tsLoading) && (!metric || !timeseriesData);
-  const error = metricsError?.message || tsError?.message || fcError?.message || accError?.message || null;
+  const error = metricsError?.message || tsError?.message || fcError?.message || accError?.message || generateError || null;
 
   if (loading) {
     return (
@@ -192,6 +218,15 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
                 <Activity className="h-3.5 w-3.5 animate-spin" /> Updating...
               </div>
             )}
+
+            <button
+              onClick={handleGenerate}
+              disabled={generating || fcLoading || accLoading}
+              className="inline-flex items-center gap-2 rounded-lg bg-linear-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500 text-white text-xs font-bold px-4 py-2 transition-all shadow-lg disabled:opacity-50"
+            >
+              {generating ? <Activity className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+              {generating ? "Generating..." : "Generate Forecast & Backtest"}
+            </button>
           </div>
         </div>
 

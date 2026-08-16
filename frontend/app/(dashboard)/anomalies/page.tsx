@@ -17,7 +17,7 @@ import {
   HelpCircle,
   SlidersHorizontal,
 } from "lucide-react";
-import { fetchGlobalAnomalies, GlobalAnomaly } from "@/app/api";
+import { GlobalAnomaly } from "@/app/api";
 import { useApi } from "@/hooks/useApi";
 import ScrollReveal from "@/components/ScrollReveal";
 import CustomSelect from "@/components/CustomSelect";
@@ -31,8 +31,8 @@ export default function GlobalAnomalyLogPage() {
   const [sortBy, setSortBy] = useState<SortOption>("date_desc");
 
   const url = activeTab === "all" 
-    ? "/api/v1/anomalies/global" 
-    : `/api/v1/anomalies/global?status=${activeTab}`;
+    ? "/api/v1/anomalies" 
+    : `/api/v1/anomalies?status=${activeTab}`;
     
   const { data: anomalies = [], error: rawError, isLoading: loading } = useApi<GlobalAnomaly[]>(url);
   const error = rawError ? rawError.message || "Failed to load anomaly log." : null;

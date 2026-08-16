@@ -71,7 +71,7 @@ def decompose_timeseries(df: pd.DataFrame) -> pd.DataFrame:
 async def run_daily_rollup_and_decomposition(db: AsyncSession, metric_id: int) -> None:
     """
     Incrementally aggregates new Observations, merges with historical DailyRollups,
-    runs STL decomposition, and bulk upserts rollups. Bounded memory complexity.
+    runs rolling-mean trend/seasonal decomposition, and bulk upserts rollups. Bounded memory complexity.
     """
     # 1. Get the latest date we have already rolled up
     latest_res = await db.execute(

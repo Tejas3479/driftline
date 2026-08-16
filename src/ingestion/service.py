@@ -351,6 +351,18 @@ async def confirm_and_persist_observations(
     updated_count = 0
 
     if schema.replace:
+        # Invalidate all derived analytics for this metric before replacing raw
+        # observations, so stale forecasts/accuracy/anomaly state never outlive the data.
+        from src.anomalies.models import Anomaly, DailyRollup
+        from src.forecasting.models import Forecast, ForecastAccuracyLog
+
+        await db.execute(delete(Anomaly).where(Anomaly.metric_id == metric_id))
+        await db.execute(delete(DailyRollup).where(DailyRollup.metric_id == metric_id))
+        await db.execute(delete(Forecast).where(Forecast.metric_id == metric_id))
+        await db.execute(delete(ForecastAccuracyLog).where(ForecastAccuracyLog.metric_id == metric_id))
+        if metric.structural_importance:
+            metric.structural_importance = []
+
         # Delete existing observations for this metric
         await db.execute(delete(Observation).where(Observation.metric_id == metric_id))
         await db.flush()
