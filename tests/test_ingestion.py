@@ -114,6 +114,7 @@ async def test_append_vs_replace_semantics():
 @pytest.mark.asyncio
 async def test_replace_invalidates_derived_data(db):
     from sqlalchemy import func, select
+
     from src.forecasting.models import Forecast, ForecastAccuracyLog
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
