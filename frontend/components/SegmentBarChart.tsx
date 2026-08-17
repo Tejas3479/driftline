@@ -102,7 +102,7 @@ export default function SegmentBarChart({
             Ranked Segment Contributions
           </h3>
           <p className="text-slate-400 text-xs mt-0.5">
-            Click any bar to drill down into that segment's historical time series
+            {"Click any bar to drill down into that segment's historical time series"}
           </p>
         </div>
 

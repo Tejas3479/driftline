@@ -164,7 +164,7 @@ export default function AnomalyDetailPage({ params }: { params: { id: string } }
                   Root-Cause Driver Explanation
                 </span>
                 <p className="text-xl md:text-2xl font-bold leading-relaxed text-slate-100">
-                  "{drivers.explanation_text}"
+                  {'"'}{drivers.explanation_text}{'"'}
                 </p>
               </div>
             </div>

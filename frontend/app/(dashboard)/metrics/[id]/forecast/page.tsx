@@ -101,6 +101,13 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
   const loading = (metricsLoading || tsLoading) && (!metric || !timeseriesData);
   const error = metricsError?.message || tsError?.message || fcError?.message || accError?.message || generateError || null;
 
+  const sortedAccuracyPoints = useMemo(() => {
+    if (!accuracyResponse?.points) return [];
+    return [...accuracyResponse.points].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [accuracyResponse?.points]);
+
   if (loading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-24 text-slate-100">
@@ -131,12 +138,6 @@ export default function ForecastPage({ params }: { params: { id: string } }) {
       </main>
     );
   }
-  const sortedAccuracyPoints = useMemo(() => {
-    if (!accuracyResponse?.points) return [];
-    return [...accuracyResponse.points].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-  }, [accuracyResponse?.points]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-8 md:p-16">

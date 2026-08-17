@@ -27,21 +27,8 @@ function MetricCard({ metric }: { metric: Metric }) {
   const { data: tsData, isLoading: tsLoading } = useApi<TimeseriesResponse>(`/api/v1/metrics/${metric.id}/timeseries`);
   const { data: anomalies = [], isLoading: anomLoading } = useApi<Anomaly[]>(`/api/v1/metrics/${metric.id}/anomalies`);
 
-  if (tsLoading || anomLoading) {
-    return (
-      <div className="h-64 rounded-2xl glass-panel p-6 flex flex-col justify-between animate-pulse">
-        <div className="space-y-3">
-          <div className="h-4 w-24 rounded-sm bg-slate-800" />
-          <div className="h-6 w-48 rounded-sm bg-slate-800" />
-        </div>
-        <div className="h-12 w-32 rounded-sm bg-slate-800" />
-        <div className="h-10 w-full rounded-xl bg-slate-800/60" />
-      </div>
-    );
-  }
-
   const points = tsData?.points || [];
-  
+
   const {
     latestValue,
     recentAnomaly,
@@ -96,6 +83,19 @@ function MetricCard({ metric }: { metric: Metric }) {
       sparklinePoints: sparklinePts,
     };
   }, [points, anomalies]);
+
+  if (tsLoading || anomLoading) {
+    return (
+      <div className="h-64 rounded-2xl glass-panel p-6 flex flex-col justify-between animate-pulse">
+        <div className="space-y-3">
+          <div className="h-4 w-24 rounded-sm bg-slate-800" />
+          <div className="h-6 w-48 rounded-sm bg-slate-800" />
+        </div>
+        <div className="h-12 w-32 rounded-sm bg-slate-800" />
+        <div className="h-10 w-full rounded-xl bg-slate-800/60" />
+      </div>
+    );
+  }
 
   const hasAnomaly = recentAnomaly !== null;
 

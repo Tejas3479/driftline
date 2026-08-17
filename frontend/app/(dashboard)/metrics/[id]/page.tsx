@@ -38,40 +38,9 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
   const error = metricsError?.message || tsError?.message || anomError?.message || null;
   const timeseriesData = tsData || null;
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-24 text-slate-100">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
-          <p className="text-slate-400 font-medium">Loading timeseries analysis...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (error || !metric || !timeseriesData) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-24 text-slate-100">
-        <div className="max-w-md rounded-xl border border-red-900 bg-red-950/20 p-6 text-center text-red-200">
-          <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <h2 className="text-xl font-bold mb-2">Metric Not Found</h2>
-          <p className="text-slate-400 text-sm mb-6">
-            {error || `Unable to load timeseries for Metric #${metricId}`}
-          </p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-white font-medium hover:bg-slate-700 transition"
-          >
-            <ArrowLeft className="h-4 w-4" /> Return to Overview
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
   // Filter timeseries and anomalies based on selected range (anchored to max date)
-  const allPoints = timeseriesData.points;
-  
+  const allPoints = timeseriesData?.points || [];
+
   const { filteredPoints, filteredAnomalies, values } = useMemo(() => {
     const sortedPoints = [...allPoints].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -110,6 +79,37 @@ export default function MetricDetail({ params }: { params: { id: string } }) {
       values: vals,
     };
   }, [allPoints, anomalies, range]);
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-24 text-slate-100">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-cyan-500 border-t-transparent" />
+          <p className="text-slate-400 font-medium">Loading timeseries analysis...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (error || !metric || !timeseriesData) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-24 text-slate-100">
+        <div className="max-w-md rounded-xl border border-red-900 bg-red-950/20 p-6 text-center text-red-200">
+          <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+          <h2 className="text-xl font-bold mb-2">Metric Not Found</h2>
+          <p className="text-slate-400 text-sm mb-6">
+            {error || `Unable to load timeseries for Metric #${metricId}`}
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-white font-medium hover:bg-slate-700 transition"
+          >
+            <ArrowLeft className="h-4 w-4" /> Return to Overview
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   const maxVal = values.length > 0 ? Math.max(...values) : 0;
   const minVal = values.length > 0 ? Math.min(...values) : 0;
